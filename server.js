@@ -1,26 +1,28 @@
-const express = require('express')
-const mongoose = require('mongoose')
-const cors = require('cors')
-require('dotenv').config()
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config();
+const bookRoutes = require("./Backend/src/routes/bookRoutes");
 
-const app = express()
+const app = express();
 
-app.use(cors())
-app.use(express.json())
+app.use(cors());
+app.use(express.json());
+app.use("/api/books", bookRoutes);
 
-app.get('/', (req, res) => {
-  res.json({ message: 'Library API is running' })
-})
+app.get("/", (req, res) => {
+  res.json({ message: "Library API is running" });
+});
 
 mongoose
   .connect(process.env.MONGO_URI)
   .then(() => {
-    console.log('MongoDB connected')
+    console.log("MongoDB connected");
     app.listen(process.env.PORT, () => {
-      console.log(`Server running on port ${process.env.PORT}`)
-    })
+      console.log(`Server running on port ${process.env.PORT}`);
+    });
   })
   .catch((err) => {
-    console.error('MongoDB connection error:', err.message)
-    process.exit(1)
-  })
+    console.error("MongoDB connection error:", err.message);
+    process.exit(1);
+  });
