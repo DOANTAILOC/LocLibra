@@ -17,42 +17,98 @@ const BorrowSchema = new mongoose.Schema(
     MSNV: {
       type: String,
       ref: "Staff",
-      required: true,
+      default: null,
       trim: true,
+    },
+    TRANGTHAI: {
+      type: String,
+      enum: [
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "BORROWING",
+        "OVERDUE",
+        "RETURNED",
+        "CANCELLED",
+      ],
+      default: "PENDING",
+    },
+    NGAYYEUCAU: {
+      type: Date,
+      default: Date.now,
+    },
+    NGAYDUYET: {
+      type: Date,
+      default: null,
+    },
+    NGAYHENLAY: {
+      type: Date,
+      default: null,
     },
     NGAYMUON: {
       type: Date,
-      required: true,
-      default: Date.now,
+      default: null,
+    },
+    NGAYNHAN: {
+      type: Date,
+      default: null,
+    },
+    NGAYHENTRA: {
+      type: Date,
+      default: null,
     },
     NGAYTRA: {
       type: Date,
-      default: null,   // null = chưa trả
+      default: null,
+    },
+    LYDOTUCHOI: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    SONGAYTRE: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    TIENPHAT: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    TRANGTHAI_PHAT: {
+      type: String,
+      enum: ["UNPAID", "PAID"],
+      default: "PAID",
     },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
-  }
+  },
 );
 
 // Indexes
 BorrowSchema.index({ MADOCGIA: 1 });
 BorrowSchema.index({ MASACH: 1 });
+BorrowSchema.index({ TRANGTHAI: 1 });
 BorrowSchema.index({ NGAYMUON: -1 });
 BorrowSchema.index({ NGAYTRA: 1 });
+BorrowSchema.index({ NGAYYEUCAU: -1 });
+BorrowSchema.index({ NGAYHENTRA: 1 });
 
-// Tìm sách đang được mượn (chưa trả)
+// Tìm sách đang được mượn (bao gồm quá hạn)
 BorrowSchema.statics.findDangMuon = function () {
-  return this.find({ NGAYTRA: null });
+  return this.find({ TRANGTHAI: { $in: ["BORROWING", "OVERDUE"] } });
 };
 
 // Tìm lịch sử mượn của một độc giả
 BorrowSchema.statics.findByDocGia = function (madocgia) {
-  return this.find({ MADOCGIA: madocgia }).sort({ NGAYMUON: -1 });
+  return this.find({ MADOCGIA: madocgia }).sort({ NGAYYEUCAU: -1 });
 };
 
-// Trả sách: cập nhật NGAYTRA
+// Trả sách: cập nhật trạng thái và ngày trả
 BorrowSchema.methods.traSach = function () {
+  this.TRANGTHAI = "RETURNED";
   this.NGAYTRA = new Date();
   return this.save();
 };

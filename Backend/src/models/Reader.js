@@ -33,6 +33,11 @@ const readerSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    NO_PHAT: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
