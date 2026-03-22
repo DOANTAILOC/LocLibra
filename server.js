@@ -3,12 +3,14 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 require("dotenv").config();
 const bookRoutes = require("./Backend/src/routes/bookRoutes");
+const authRoutes = require("./Backend/src/routes/authRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use("/api/books", bookRoutes);
+app.use("/api/auth", authRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Library API is running" });
