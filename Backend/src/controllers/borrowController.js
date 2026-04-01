@@ -7,6 +7,15 @@ const MAX_ACTIVE_BORROWS = 5;
 const DEFAULT_BORROW_DAYS = 14;
 const DEFAULT_PICKUP_DEADLINE_DAYS = 2;
 const DAILY_FINE_RATE = 2000;
+const BORROW_STATUSES = [
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+  "BORROWING",
+  "OVERDUE",
+  "RETURNED",
+  "CANCELLED",
+];
 
 const addDays = (date, days) => {
   const result = new Date(date);
@@ -388,6 +397,95 @@ const getMyBorrowRequests = async (req, res) => {
   }
 };
 
+const getBorrows = async (req, res) => {
+  try {
+    await Borrow.updateMany(
+      {
+        TRANGTHAI: "BORROWING",
+        NGAYHENTRA: { $lt: new Date() },
+      },
+      { $set: { TRANGTHAI: "OVERDUE" } },
+    );
+
+    const { status } = req.query;
+    const filter = {};
+
+    if (status) {
+      const statuses = status
+        .split(",")
+        .map((item) => item.trim().toUpperCase())
+        .filter(Boolean);
+
+      const invalidStatuses = statuses.filter(
+        (item) => !BORROW_STATUSES.includes(item),
+      );
+
+      if (invalidStatuses.length > 0) {
+        return res.status(400).json({
+          message: "Trạng thái không hợp lệ",
+          invalidStatuses,
+          allowedStatuses: BORROW_STATUSES,
+        });
+      }
+
+      filter.TRANGTHAI = { $in: [...new Set(statuses)] };
+    }
+
+    const borrows = await Borrow.find(filter).sort({
+      NGAYYEUCAU: -1,
+      created_at: -1,
+    });
+
+    const readerIds = [...new Set(borrows.map((borrow) => borrow.MADOCGIA))];
+    const bookIds = [...new Set(borrows.map((borrow) => borrow.MASACH))];
+
+    const [readers, books] = await Promise.all([
+      Reader.find({ MADOCGIA: { $in: readerIds } })
+        .select("MADOCGIA HOLOT TEN")
+        .lean(),
+      Book.find({ MASACH: { $in: bookIds } })
+        .select("MASACH TENSACH")
+        .lean(),
+    ]);
+
+    const readerMap = new Map(
+      readers.map((reader) => [reader.MADOCGIA, reader]),
+    );
+    const bookMap = new Map(books.map((book) => [book.MASACH, book]));
+
+    const enrichedBorrows = borrows.map((borrow) => {
+      const reader = readerMap.get(borrow.MADOCGIA);
+      const book = bookMap.get(borrow.MASACH);
+      const fullName = reader
+        ? [reader.HOLOT, reader.TEN].filter(Boolean).join(" ").trim()
+        : null;
+
+      return {
+        ...borrow.toObject(),
+        DOCGIA: {
+          MADOCGIA: borrow.MADOCGIA,
+          HOTEN: fullName,
+        },
+        SACH: {
+          MASACH: borrow.MASACH,
+          TENSACH: book?.TENSACH || null,
+        },
+      };
+    });
+
+    return res.status(200).json({
+      items: enrichedBorrows,
+      total: enrichedBorrows.length,
+      availableStatuses: BORROW_STATUSES,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách phiếu mượn",
+      error: error.message,
+    });
+  }
+};
+
 const getPendingRequests = async (req, res) => {
   try {
     const borrows = await Borrow.find({ TRANGTHAI: "PENDING" }).sort({
@@ -395,12 +493,10 @@ const getPendingRequests = async (req, res) => {
     });
     return res.status(200).json(borrows);
   } catch (error) {
-    return res
-      .status(500)
-      .json({
-        message: "Lỗi khi lấy danh sách chờ duyệt",
-        error: error.message,
-      });
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách chờ duyệt",
+      error: error.message,
+    });
   }
 };
 
@@ -411,12 +507,10 @@ const getActiveBorrows = async (req, res) => {
     }).sort({ created_at: -1 });
     return res.status(200).json(borrows);
   } catch (error) {
-    return res
-      .status(500)
-      .json({
-        message: "Lỗi khi lấy danh sách đang hoạt động",
-        error: error.message,
-      });
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách đang hoạt động",
+      error: error.message,
+    });
   }
 };
 
@@ -469,6 +563,7 @@ module.exports = {
   handOverBook,
   returnBook,
   payFine,
+  getBorrows,
   getMyBorrowRequests,
   getPendingRequests,
   getActiveBorrows,

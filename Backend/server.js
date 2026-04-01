@@ -1,10 +1,11 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-require("dotenv").config();
-const bookRoutes = require("./Backend/src/routes/bookRoutes");
-const authRoutes = require("./Backend/src/routes/authRoutes");
-const borrowRoutes = require("./Backend/src/routes/borrowRoutes");
+const path = require("path");
+require("dotenv").config({ path: path.resolve(__dirname, ".env") });
+const bookRoutes = require("./src/routes/bookRoutes");
+const authRoutes = require("./src/routes/authRoutes");
+const borrowRoutes = require("./src/routes/borrowRoutes");
 
 const app = express();
 

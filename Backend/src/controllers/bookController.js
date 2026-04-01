@@ -1,8 +1,16 @@
 const Book = require("../models/Book");
 
+// Tìm kiếm sách theo nhiều tiêu chí
 const getBooks = async (req, res) => {
   try {
-    const books = await Book.find().sort({ created_at: -1 });
+    const { theloai, tacgia, nhaxuatban, tensach } = req.query;
+    let filter = {};
+    if (theloai) filter.THELOAI = theloai;
+    if (tacgia) filter.TACGIA = tacgia;
+    if (nhaxuatban) filter.MANXB = nhaxuatban;
+    if (tensach) filter.TENSACH = { $regex: tensach, $options: "i" };
+
+    const books = await Book.find(filter).sort({ created_at: -1 });
     return res.status(200).json(books);
   } catch (error) {
     return res

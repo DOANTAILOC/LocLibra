@@ -6,6 +6,7 @@ const {
   handOverBook,
   returnBook,
   payFine,
+  getBorrows,
   getMyBorrowRequests,
   getPendingRequests,
   getActiveBorrows,
@@ -26,6 +27,8 @@ router.post(
   createBorrowRequest,
 );
 router.get("/my", authenticate, authorizeRoles("reader"), getMyBorrowRequests);
+
+router.get("/", authenticate, authorizeRoles("staff"), getBorrows);
 
 router.get(
   "/pending",
