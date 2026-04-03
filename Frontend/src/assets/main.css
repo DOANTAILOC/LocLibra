@@ -2,9 +2,213 @@
 
 :root {
   color-scheme: light;
+  --secondary-container: #e1e3de;
+  --secondary-dim: #565955;
+  --surface-container-highest: #e7ebd0;
+  --tertiary-fixed-dim: #dee9d9;
+  --on-primary-fixed-variant: #50604c;
+  --surface: #fefdf1;
+  --primary-container: #d6e8cf;
+  --on-primary-container: #465643;
+  --on-surface: #363a27;
+  --tertiary: #5d675b;
+  --on-secondary: #ffffff;
+  --on-secondary-fixed-variant: #595c59;
+  --background: #fefdf1;
+  --on-surface-variant: #626651;
+  --surface-container-low: #fafaeb;
+  --primary: #53634f;
+  --tertiary-container: #ecf7e7;
+  --primary-fixed: #d6e8cf;
+  --surface-variant: #e7ebd0;
+  --outline: #7f836c;
+  --secondary: #626561;
+  --primary-fixed-dim: #c8dac1;
+  --surface-dim: #e1e5c7;
+  --on-error: #ffffff;
+  --on-secondary-fixed: #3d403d;
+  --on-primary: #ebfde3;
+  --on-error-container: #742410;
+  --secondary-fixed-dim: #d3d5d0;
+  --on-tertiary: #ffffff;
+  --surface-container-lowest: #ffffff;
+  --error-dim: #5c1202;
+  --inverse-primary: #edffe5;
+  --on-tertiary-container: #545e53;
+  --on-background: #363a27;
+  --error: #a54731;
+  --on-tertiary-fixed: #424c41;
+  --surface-bright: #fefdf1;
+  --primary-dim: #475744;
+  --surface-container: #f4f5e2;
+  --error-container: #fe8b70;
+  --on-secondary-container: #4f534f;
+  --on-tertiary-fixed-variant: #5f695d;
+  --outline-variant: #b8bca3;
+  --inverse-surface: #0d0f08;
+  --inverse-on-surface: #9d9d93;
+  --tertiary-fixed: #ecf7e7;
+  --tertiary-dim: #515b4f;
+  --on-primary-fixed: #344331;
+  --surface-container-high: #edf0d9;
+  --surface-tint: #53634f;
+  --secondary-fixed: #e1e3de;
+  --text-muted: #626651;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
 }
 
 body {
-  background-color: #ffffff;
-  color: #0f172a;
+  margin: 0;
+  font-family: "Manrope", sans-serif;
+  background-color: var(--background);
+  color: var(--on-surface);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Noto Serif", serif;
+  color: var(--on-surface);
+}
+
+a {
+  color: var(--primary);
+}
+
+::selection {
+  background-color: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+.glass-panel {
+  background: rgb(254 253 241 / 80%);
+  backdrop-filter: blur(12px);
+}
+
+.editorial-shadow {
+  box-shadow: 0 12px 40px rgb(54 58 39 / 6%);
+}
+
+.panel-surface {
+  background: var(--surface-container-lowest);
+  border: 1px solid rgb(184 188 163 / 45%);
+  border-radius: 0.75rem;
+}
+
+.btn-primary {
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background: linear-gradient(
+    135deg,
+    var(--primary),
+    var(--on-primary-fixed-variant)
+  );
+  color: var(--on-primary);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition:
+    transform 0.18s ease,
+    filter 0.18s ease;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+}
+
+.btn-secondary {
+  border: 1px solid rgb(184 188 163 / 55%);
+  border-radius: 0.75rem;
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.btn-ghost {
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-chip-active {
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+}
+
+.status-chip-overdue {
+  background: rgb(254 139 112 / 30%);
+  color: var(--on-error-container);
+}
+
+.status-chip-returned {
+  background: var(--tertiary-container);
+  color: var(--on-tertiary-container);
+}
+
+.status-chip-draft {
+  background: var(--surface-container-highest);
+  color: var(--on-surface-variant);
+}
+
+.form-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.form-input,
+.form-select {
+  width: 100%;
+  border: 1px solid rgb(184 188 163 / 70%);
+  border-radius: 0.65rem;
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+  font-size: 0.95rem;
+  padding: 0.72rem 0.9rem;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.form-input:focus,
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgb(214 232 207 / 45%);
 }

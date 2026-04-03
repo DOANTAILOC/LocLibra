@@ -4,7 +4,7 @@ const Reader = require("../models/Reader");
 const Account = require("../models/Account");
 
 const getRedirectPathByRole = (role) => {
-  return role === "staff" ? "/admin" : "/member";
+  return role === "staff" ? "/" : "/my-loans";
 };
 
 const generateToken = (account) => {
@@ -15,6 +15,19 @@ const generateToken = (account) => {
       expiresIn: process.env.JWT_EXPIRE || "7d",
     },
   );
+};
+
+const generateReaderCode = async () => {
+  let code;
+  let exists = true;
+
+  while (exists) {
+    const randomPart = Math.floor(1000 + Math.random() * 9000);
+    code = `DG${Date.now().toString().slice(-6)}${randomPart}`;
+    exists = await Reader.exists({ MADOCGIA: code });
+  }
+
+  return code;
 };
 
 const registerStaff = async (req, res) => {
@@ -93,19 +106,21 @@ const registerReader = async (req, res) => {
       password,
     } = req.body;
 
+    const normalizedCode = MADOCGIA?.trim() || (await generateReaderCode());
+
     if (!username || !password) {
       return res
         .status(400)
         .json({ message: "Vui lòng cung cấp username và password" });
     }
 
-    const existingReader = await Reader.findOne({ MADOCGIA });
+    const existingReader = await Reader.findOne({ MADOCGIA: normalizedCode });
     if (existingReader) {
       return res.status(409).json({ message: "Mã độc giả đã tồn tại" });
     }
 
     const newReader = await Reader.create({
-      MADOCGIA,
+      MADOCGIA: normalizedCode,
       HOLOT,
       TEN,
       NGAYSINH,

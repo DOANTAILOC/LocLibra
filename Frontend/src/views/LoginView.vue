@@ -1,56 +1,105 @@
 <template>
-  <main class="login-page">
-    <section class="visual-panel" aria-hidden="true">
-      <div class="visual-overlay"></div>
-      <div class="visual-content">
-        <h1>Tri thuc duoc quan ly he thong.</h1>
-        <p>
-          Dang nhap de truy cap kho sach, lich su muon tra va cac cong cu quan
-          tri thu vien.
+  <main
+    class="grid min-h-screen grid-cols-1 bg-[radial-gradient(circle_at_8%_18%,rgb(214_232_207/30%),transparent_34%),var(--background)] text-[var(--on-surface)] lg:grid-cols-[1.1fr_1fr]"
+  >
+    <section
+      aria-hidden="true"
+      class="relative overflow-hidden bg-[url('https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1400&q=80')] bg-cover bg-center bg-no-repeat max-lg:min-h-[32vh]"
+    >
+      <div class="absolute inset-0 bg-white/30"></div>
+      <div
+        class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/28 to-black/8"
+      ></div>
+      <div
+        class="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgb(214_232_207/24%),transparent_48%)]"
+      ></div>
+      <div
+        class="relative z-10 flex h-full max-w-[560px] flex-col justify-end px-6 py-10 text-[var(--on-primary)] sm:px-8 md:px-12 md:py-16"
+      >
+        <h1
+          class="mb-4 font-serif text-[clamp(2rem,3.8vw,3.8rem)] leading-[1.15] !text-white"
+        >
+          Sách là kho tàng tri thức của nhân loại.
+        </h1>
+        <p class="max-w-[44ch] text-[1.05rem] leading-[1.7] text-white/90">
+        Đọc sách mỗi ngày để gìn giữ sự tiếp nối của tư duy.
         </p>
       </div>
     </section>
 
-    <section class="form-panel">
-      <div class="form-wrap">
-        <header class="form-header">
-          <p class="brand">LocLibrary</p>
-          <h2>Dang nhap he thong</h2>
-          <p class="subtitle">Su dung username va mat khau da duoc cap.</p>
+    <section class="grid place-items-center px-5 py-8 sm:px-8 lg:p-8">
+      <div
+        class="glass-panel editorial-shadow w-full max-w-[430px] rounded-xl border border-[var(--outline-variant)] p-6 sm:p-8"
+      >
+        <header class="mb-8">
+          <p class="mb-8 font-serif text-[1.3rem] italic text-[var(--primary)]">
+            LocLibrary
+          </p>
+          <h2
+            class="mb-2 font-serif text-[clamp(1.8rem,2.5vw,2.5rem)] leading-[1.1] text-[var(--on-surface)]"
+          >
+            Welcome back
+          </h2>
+          <p class="text-[0.95rem] text-[var(--on-surface-variant)]">
+            Sử dụng username và mật khẩu đã được cấp
+          </p>
         </header>
 
-        <form class="login-form" @submit.prevent="handleLogin">
-          <div class="field-group">
-            <label for="username">Username</label>
+        <form class="flex flex-col gap-5" @submit.prevent="handleLogin">
+          <div class="flex flex-col gap-2">
+            <label
+              for="username"
+              class="text-[0.72rem] font-bold tracking-[0.12em] uppercase text-[var(--on-surface-variant)]"
+              >Username</label
+            >
             <input
               id="username"
               v-model.trim="username"
               type="text"
-              placeholder="Nhap username"
+              placeholder="Nhập username"
               autocomplete="username"
+              class="rounded-lg border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] px-3.5 py-3 text-base text-[var(--on-surface)] transition focus:border-[var(--primary)] focus:ring-[3px] focus:ring-[rgb(214_232_207/45%)] focus:outline-none"
             />
           </div>
 
-          <div class="field-group">
-            <label for="password">Mat khau</label>
+          <div class="flex flex-col gap-2">
+            <label
+              for="password"
+              class="text-[0.72rem] font-bold tracking-[0.12em] uppercase text-[var(--on-surface-variant)]"
+              >Mật khẩu</label
+            >
             <input
               id="password"
               v-model="password"
               type="password"
-              placeholder="Nhap mat khau"
+              placeholder="Nhập mật khẩu"
               autocomplete="current-password"
+              class="rounded-lg border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] px-3.5 py-3 text-base text-[var(--on-surface)] transition focus:border-[var(--primary)] focus:ring-[3px] focus:ring-[rgb(214_232_207/45%)] focus:outline-none"
             />
           </div>
 
-          <p v-if="error" class="error-msg">{{ error }}</p>
+          <p
+            v-if="error"
+            class="rounded-lg border border-[rgb(254_139_112/45%)] bg-[rgb(254_139_112/20%)] px-3 py-2.5 text-[0.9rem] text-[var(--on-error-container)]"
+          >
+            {{ error }}
+          </p>
 
-          <button class="submit-btn" type="submit" :disabled="loading">
-            {{ loading ? "Dang dang nhap..." : "Dang nhap" }}
+          <button
+            class="mt-1 cursor-pointer rounded-xl border border-transparent bg-gradient-to-br from-[var(--primary)] to-[var(--on-primary-fixed-variant)] px-4 py-4 text-[0.72rem] font-bold tracking-[0.12em] uppercase text-[var(--on-primary)] transition hover:-translate-y-px hover:brightness-[1.03] disabled:cursor-not-allowed disabled:opacity-70"
+            type="submit"
+            :disabled="loading"
+          >
+            {{ loading ? "Dang dang nhap..." : "Đăng nhập" }}
           </button>
 
-          <p class="register-link">
-            Chua co tai khoan?
-            <RouterLink to="/register">Dang ky tai khoan doc gia</RouterLink>
+          <p class="mt-1 text-[0.9rem] text-[var(--on-surface-variant)]">
+            Chưa có tài khoản?
+            <RouterLink
+              to="/register"
+              class="ml-1.5 font-semibold text-[var(--primary)] hover:underline"
+              >Đăng kí tài khoản độc giả</RouterLink
+            >
           </p>
         </form>
       </div>
@@ -86,208 +135,3 @@ async function handleLogin() {
   }
 }
 </script>
-
-<style scoped>
-:global(body) {
-  margin: 0;
-}
-
-.login-page {
-  --surface: #f7f4ed;
-  --ink: #2f3a2d;
-  --ink-soft: #5f6b5a;
-  --brand: #4a5d45;
-  --brand-soft: #879882;
-  --line: #bdc6b9;
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.visual-panel {
-  position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(34, 46, 32, 0.2), rgba(34, 46, 32, 0.72)),
-    url("https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=1400&q=80")
-      center/cover no-repeat;
-}
-
-.visual-overlay {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(
-    circle at 20% 20%,
-    rgba(203, 215, 195, 0.26),
-    transparent 45%
-  );
-}
-
-.visual-content {
-  position: relative;
-  z-index: 1;
-  max-width: 560px;
-  padding: 6rem 4rem;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  height: 100%;
-}
-
-.visual-content h1 {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2rem, 3.8vw, 3.8rem);
-  line-height: 1.15;
-  margin: 0 0 1rem;
-}
-
-.visual-content p {
-  margin: 0;
-  max-width: 44ch;
-  font-size: 1.05rem;
-  line-height: 1.7;
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.form-panel {
-  display: grid;
-  place-items: center;
-  padding: 2rem;
-}
-
-.form-wrap {
-  width: 100%;
-  max-width: 430px;
-}
-
-.form-header {
-  margin-bottom: 2rem;
-}
-
-.brand {
-  margin: 0 0 2.5rem;
-  font-family: Georgia, "Times New Roman", serif;
-  font-style: italic;
-  color: var(--brand);
-  font-size: 1.3rem;
-}
-
-.form-header h2 {
-  margin: 0 0 0.6rem;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.8rem, 2.5vw, 2.5rem);
-  line-height: 1.1;
-}
-
-.subtitle {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.95rem;
-}
-
-.login-form {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.field-group label {
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  font-weight: 700;
-}
-
-.field-group input {
-  border: none;
-  border-bottom: 1px solid var(--line);
-  background: transparent;
-  padding: 0.65rem 0.2rem;
-  font-size: 1rem;
-  color: var(--ink);
-  transition: border-color 0.2s ease;
-}
-
-.field-group input:focus {
-  outline: none;
-  border-color: var(--brand-soft);
-}
-
-.error-msg {
-  margin: 0.1rem 0;
-  color: #bd3131;
-  font-size: 0.9rem;
-}
-
-.submit-btn {
-  margin-top: 0.65rem;
-  border: none;
-  cursor: pointer;
-  border-radius: 10px;
-  padding: 0.95rem 1rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #fff;
-  background: linear-gradient(135deg, var(--brand-soft), var(--brand));
-  transition:
-    transform 0.18s ease,
-    filter 0.18s ease;
-}
-
-.submit-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  filter: brightness(1.05);
-}
-
-.submit-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.register-link {
-  margin: 0.45rem 0 0;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-
-.register-link a {
-  color: var(--brand);
-  margin-left: 0.35rem;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.register-link a:hover {
-  text-decoration: underline;
-}
-
-@media (max-width: 980px) {
-  .login-page {
-    grid-template-columns: 1fr;
-  }
-
-  .visual-panel {
-    min-height: 32vh;
-  }
-
-  .visual-content {
-    padding: 2.5rem 1.5rem;
-  }
-
-  .form-panel {
-    padding: 2rem 1.2rem 3rem;
-  }
-}
-</style>
