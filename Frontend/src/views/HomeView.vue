@@ -73,7 +73,7 @@
       </div>
     </section>
 
-    <section class="container mx-auto px-4 pb-20">
+    <section id="about-us" class="container mx-auto px-4 pb-20">
       <div class="mb-8 flex items-end gap-4">
         <h2 class="text-3xl font-light text-[var(--on-surface)]">
           Thành phần hệ thống
