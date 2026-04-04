@@ -46,6 +46,12 @@ const BookSchema = new mongoose.Schema(
       ref: "Genre",
       trim: true,
     },
+    MOTA_NGAN: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

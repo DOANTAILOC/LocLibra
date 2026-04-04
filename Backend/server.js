@@ -6,6 +6,7 @@ require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 const bookRoutes = require("./src/routes/bookRoutes");
 const authRoutes = require("./src/routes/authRoutes");
 const borrowRoutes = require("./src/routes/borrowRoutes");
+const voteRoutes = require("./src/routes/voteRoutes");
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use("/api/books", bookRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/borrows", borrowRoutes);
+app.use("/api/votes", voteRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Library API is running" });

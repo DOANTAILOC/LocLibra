@@ -3,6 +3,7 @@ import HomeView from "../views/HomeView.vue";
 import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import BookListView from "../views/BookListView.vue";
+import BookDetailView from "../views/BookDetailView.vue";
 import MyLoansView from "../views/MyLoansView.vue";
 import MyProfileView from "../views/MyProfileView.vue";
 
@@ -11,6 +12,7 @@ const routes = [
   { path: "/login", component: LoginView },
   { path: "/register", component: RegisterView },
   { path: "/books", component: BookListView },
+  { path: "/books/:id", component: BookDetailView },
   { path: "/my-loans", component: MyLoansView, meta: { requiresAuth: true } },
   {
     path: "/my-profile",

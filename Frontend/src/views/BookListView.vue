@@ -76,6 +76,10 @@
             v-for="book in filteredBooks"
             :key="book._id || book.MASACH"
             :book="book"
+            :average-score="voteAverage(book.MASACH)"
+            :total-votes="voteCount(book.MASACH)"
+            @detail="goToBookDetail"
+            @borrow="handleBorrowFromCard"
           />
         </div>
       </section>
@@ -85,15 +89,19 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import api from "../api/axios";
 import SearchBar from "../components/books/SearchBar.vue";
 import FilterSection from "../components/books/FilterSection.vue";
 import ResultToolbar from "../components/books/ResultToolbar.vue";
 import BookCard from "../components/books/BookCard.vue";
 
+const router = useRouter();
+
 const loading = ref(false);
 const errorMessage = ref("");
 const books = ref([]);
+const voteSummaryByMasach = ref({});
 
 const searchText = ref("");
 const selectedGenres = ref([]);
@@ -242,6 +250,55 @@ function updateFilter(key, value) {
   }
 }
 
+async function handleBorrowFromCard(book) {
+  if (!book?.MASACH) return;
+
+  try {
+    await api.post("/borrows/request", { MASACH: book.MASACH });
+    window.alert("Đã gửi yêu cầu mượn sách thành công.");
+  } catch (error) {
+    window.alert(
+      error?.response?.data?.message || "Không thể gửi yêu cầu mượn lúc này.",
+    );
+  }
+}
+
+function goToBookDetail(book) {
+  if (!book?._id) return;
+  router.push(`/books/${book._id}`);
+}
+
+function voteAverage(masach) {
+  return voteSummaryByMasach.value[masach]?.averageScore || 0;
+}
+
+function voteCount(masach) {
+  return voteSummaryByMasach.value[masach]?.totalVotes || 0;
+}
+
+async function fetchVoteSummaries(list) {
+  const entries = await Promise.all(
+    list
+      .filter((item) => item.MASACH)
+      .map(async (item) => {
+        try {
+          const { data } = await api.get(`/votes/books/${item.MASACH}`);
+          return [
+            item.MASACH,
+            {
+              averageScore: Number(data?.averageScore || 0),
+              totalVotes: Number(data?.totalVotes || 0),
+            },
+          ];
+        } catch {
+          return [item.MASACH, { averageScore: 0, totalVotes: 0 }];
+        }
+      }),
+  );
+
+  voteSummaryByMasach.value = Object.fromEntries(entries);
+}
+
 function resetFilters() {
   searchText.value = "";
   selectedGenres.value = [];
@@ -258,6 +315,7 @@ async function fetchBooks() {
   try {
     const response = await api.get("/books");
     books.value = Array.isArray(response.data) ? response.data : [];
+    await fetchVoteSummaries(books.value);
   } catch (error) {
     errorMessage.value =
       error?.response?.data?.message ||
