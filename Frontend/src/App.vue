@@ -8,5 +8,10 @@ import { useRoute } from "vue-router";
 import NavBar from "./components/NavBar.vue";
 
 const route = useRoute();
-const hideNavbar = computed(() => ["/login", "/register"].includes(route.path));
+const hideNavbar = computed(() => {
+  return (
+    ["/login", "/register"].includes(route.path) ||
+    route.path.startsWith("/admin")
+  );
+});
 </script>

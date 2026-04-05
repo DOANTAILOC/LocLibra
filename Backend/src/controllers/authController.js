@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const Staff = require("../models/Staff");
 const Reader = require("../models/Reader");
 const Account = require("../models/Account");
+const Borrow = require("../models/Borrow");
 
 const getRedirectPathByRole = (role) => {
   return role === "staff" ? "/" : "/my-loans";
@@ -258,9 +259,85 @@ const verifyToken = async (req, res) => {
   }
 };
 
+const getReadersForStaff = async (req, res) => {
+  try {
+    const search = req.query.q?.trim() || "";
+    const query = {};
+
+    if (search) {
+      query.$or = [
+        { MADOCGIA: { $regex: search, $options: "i" } },
+        { HOLOT: { $regex: search, $options: "i" } },
+        { TEN: { $regex: search, $options: "i" } },
+        { DIENTHOAI: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    const readers = await Reader.find(query).sort({ created_at: -1 }).lean();
+
+    const readerCodes = readers.map((reader) => reader.MADOCGIA);
+    const borrowStats = await Borrow.aggregate([
+      { $match: { MADOCGIA: { $in: readerCodes } } },
+      {
+        $group: {
+          _id: "$MADOCGIA",
+          totalBorrows: { $sum: 1 },
+          activeBorrows: {
+            $sum: {
+              $cond: [{ $in: ["$TRANGTHAI", ["BORROWING", "OVERDUE"]] }, 1, 0],
+            },
+          },
+          overdueBorrows: {
+            $sum: {
+              $cond: [{ $eq: ["$TRANGTHAI", "OVERDUE"] }, 1, 0],
+            },
+          },
+          latestBorrowAt: { $max: "$NGAYMUON" },
+          latestRequestAt: { $max: "$NGAYYEUCAU" },
+        },
+      },
+    ]);
+
+    const statsMap = new Map(borrowStats.map((item) => [item._id, item]));
+
+    const items = readers.map((reader) => {
+      const stats = statsMap.get(reader.MADOCGIA);
+      const fullName = [reader.HOLOT, reader.TEN]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+      const hasDebt = (reader.NO_PHAT || 0) > 0;
+      const hasOverdue = (stats?.overdueBorrows || 0) > 0;
+
+      return {
+        ...reader,
+        HOTEN: fullName,
+        status: hasDebt || hasOverdue ? "TEMP_LOCKED" : "ACTIVE",
+        stats: {
+          totalBorrows: stats?.totalBorrows || 0,
+          activeBorrows: stats?.activeBorrows || 0,
+          overdueBorrows: stats?.overdueBorrows || 0,
+          latestBorrowAt: stats?.latestBorrowAt || null,
+          latestRequestAt: stats?.latestRequestAt || null,
+        },
+      };
+    });
+
+    return res.status(200).json({ items, total: items.length });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({
+        message: "Lỗi khi lấy danh sách thành viên",
+        error: error.message,
+      });
+  }
+};
+
 module.exports = {
   registerStaff,
   registerReader,
   login,
   verifyToken,
+  getReadersForStaff,
 };

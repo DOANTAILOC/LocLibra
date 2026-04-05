@@ -109,6 +109,10 @@ const unavailableLabel = computed(() =>
 );
 
 const cover = computed(() => {
+  if (props.book.ANHBIA_URL) {
+    return props.book.ANHBIA_URL;
+  }
+
   const seed = encodeURIComponent(
     props.book.MASACH || props.book.TENSACH || "book",
   );

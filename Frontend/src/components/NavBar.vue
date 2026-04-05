@@ -41,6 +41,14 @@
         >
           Mượn của tôi
         </RouterLink>
+
+        <RouterLink
+          v-if="authStore.isAdmin"
+          to="/admin"
+          :class="navItemClass(route.path.startsWith('/admin'))"
+        >
+          Quản trị
+        </RouterLink>
       </nav>
 
       <div v-if="!authStore.isLoggedIn" class="flex items-center gap-3">

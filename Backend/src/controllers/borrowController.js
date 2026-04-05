@@ -95,7 +95,10 @@ const createBorrowRequest = async (req, res) => {
       });
     }
 
-    const book = await Book.findOne({ MASACH });
+    const book = await Book.findOne({
+      MASACH,
+      TRANGTHAI: { $ne: "DELETED" },
+    });
     if (!book) {
       return res.status(404).json({ message: "Không tìm thấy sách" });
     }
@@ -156,7 +159,10 @@ const approveBorrowRequest = async (req, res) => {
         .json({ message: "Chỉ có thể duyệt phiếu đang chờ" });
     }
 
-    const book = await Book.findOne({ MASACH: borrow.MASACH });
+    const book = await Book.findOne({
+      MASACH: borrow.MASACH,
+      TRANGTHAI: { $ne: "DELETED" },
+    });
     if (!book || book.SOQUYEN <= 0) {
       return res.status(400).json({ message: "Sách không còn sẵn để duyệt" });
     }
@@ -243,7 +249,11 @@ const handOverBook = async (req, res) => {
     }
 
     const updatedBook = await Book.findOneAndUpdate(
-      { MASACH: borrow.MASACH, SOQUYEN: { $gt: 0 } },
+      {
+        MASACH: borrow.MASACH,
+        TRANGTHAI: { $ne: "DELETED" },
+        SOQUYEN: { $gt: 0 },
+      },
       { $inc: { SOQUYEN: -1 } },
       { new: true },
     );
@@ -291,7 +301,7 @@ const returnBook = async (req, res) => {
     }
 
     await Book.findOneAndUpdate(
-      { MASACH: borrow.MASACH },
+      { MASACH: borrow.MASACH, TRANGTHAI: { $ne: "DELETED" } },
       { $inc: { SOQUYEN: 1 } },
     );
 
@@ -443,7 +453,7 @@ const getBorrows = async (req, res) => {
       Reader.find({ MADOCGIA: { $in: readerIds } })
         .select("MADOCGIA HOLOT TEN")
         .lean(),
-      Book.find({ MASACH: { $in: bookIds } })
+      Book.find({ MASACH: { $in: bookIds }, TRANGTHAI: { $ne: "DELETED" } })
         .select("MASACH TENSACH")
         .lean(),
     ]);

@@ -49,8 +49,28 @@ const BookSchema = new mongoose.Schema(
     MOTA_NGAN: {
       type: String,
       trim: true,
-      maxlength: 500,
+      maxlength: 1500,
       default: "",
+    },
+    ANHBIA_URL: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    ANHBIA_PUBLIC_ID: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    TRANGTHAI: {
+      type: String,
+      enum: ["ACTIVE", "DELETED"],
+      default: "ACTIVE",
+      index: true,
+    },
+    DA_XOA_LUC: {
+      type: Date,
+      default: null,
     },
   },
   {

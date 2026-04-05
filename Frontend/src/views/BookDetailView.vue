@@ -165,6 +165,10 @@ const bookCover = computed(() => {
 });
 
 function coverByBook(item) {
+  if (item?.ANHBIA_URL) {
+    return item.ANHBIA_URL;
+  }
+
   const seed = encodeURIComponent(item.MASACH || item.TENSACH || "book");
   return `https://picsum.photos/seed/${seed}/900/1300`;
 }
