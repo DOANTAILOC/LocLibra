@@ -208,8 +208,15 @@
         <form class="grid grid-cols-1 gap-4" @submit.prevent="handleSubmit">
           <div v-for="field in formFields" :key="field.key" class="space-y-1">
             <label class="form-label">{{ field.label }}</label>
+            <input
+              v-if="isAutoCodeField(field)"
+              :value="autoCodePreview || 'Đang tạo mã...'"
+              class="form-input"
+              type="text"
+              readonly
+            />
             <textarea
-              v-if="field.type === 'textarea'"
+              v-else-if="field.type === 'textarea'"
               v-model.trim="formData[field.key]"
               class="form-input min-h-[90px]"
               :required="field.required"
@@ -281,6 +288,8 @@ const props = defineProps({
   columns: { type: Array, required: true },
   formFields: { type: Array, required: true },
   detailFields: { type: Array, default: () => [] },
+  autoCodeFieldKey: { type: String, default: "" },
+  autoCodeEndpoint: { type: String, default: "" },
 });
 
 const mobileMenuOpen = ref(false);
@@ -295,6 +304,7 @@ const selectedEntity = ref(null);
 const showModal = ref(false);
 const mode = ref("create");
 const formData = ref({});
+const autoCodePreview = ref("");
 
 const resolvedDetailFields = computed(() => {
   if (props.detailFields.length > 0) return props.detailFields;
@@ -353,6 +363,29 @@ const normalizeError = (error) => {
   );
 };
 
+const isAutoCodeField = (field) => {
+  return (
+    mode.value === "create" &&
+    props.autoCodeFieldKey &&
+    field.key === props.autoCodeFieldKey
+  );
+};
+
+const fetchAutoCodePreview = async () => {
+  if (!props.autoCodeEndpoint) return;
+
+  try {
+    const response = await api.get(props.autoCodeEndpoint);
+    autoCodePreview.value = response.data?.nextCode || "";
+    if (props.autoCodeFieldKey) {
+      formData.value[props.autoCodeFieldKey] = autoCodePreview.value;
+    }
+  } catch (error) {
+    autoCodePreview.value = "";
+    errorMessage.value = normalizeError(error);
+  }
+};
+
 const fetchEntities = async () => {
   isLoading.value = true;
   errorMessage.value = "";
@@ -370,9 +403,10 @@ const fetchEntities = async () => {
   }
 };
 
-const openCreateModal = () => {
+const openCreateModal = async () => {
   mode.value = "create";
   resetFormData();
+  await fetchAutoCodePreview();
   showModal.value = true;
   errorMessage.value = "";
 };
@@ -401,14 +435,16 @@ const handleSubmit = async () => {
   successMessage.value = "";
 
   try {
+    const payload = { ...formData.value };
+    if (props.autoCodeFieldKey) {
+      delete payload[props.autoCodeFieldKey];
+    }
+
     if (mode.value === "edit" && selectedEntity.value?._id) {
-      await api.put(
-        `${props.endpoint}/${selectedEntity.value._id}`,
-        formData.value,
-      );
+      await api.put(`${props.endpoint}/${selectedEntity.value._id}`, payload);
       successMessage.value = `Cập nhật ${props.entityName} thành công`;
     } else {
-      await api.post(props.endpoint, formData.value);
+      await api.post(props.endpoint, payload);
       successMessage.value = `Thêm ${props.entityName} thành công`;
     }
 

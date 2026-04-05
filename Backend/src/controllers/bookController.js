@@ -1,5 +1,120 @@
 const Book = require("../models/Book");
+const Author = require("../models/Author");
+const Genre = require("../models/Genre");
 const cloudinary = require("../config/cloudinary");
+
+const normalizeStringArray = (value) => {
+  if (Array.isArray(value)) {
+    return [
+      ...new Set(
+        value.map((item) => String(item || "").trim()).filter(Boolean),
+      ),
+    ];
+  }
+
+  if (typeof value === "string") {
+    return [
+      ...new Set(
+        value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+      ),
+    ];
+  }
+
+  return [];
+};
+
+const normalizeCodeArray = (value) => {
+  return normalizeStringArray(value).map((item) => item.toUpperCase());
+};
+
+const buildAuthorNameMap = async () => {
+  const authors = await Author.find({ MATG: { $exists: true, $ne: null } })
+    .select("MATG Hoten")
+    .lean();
+
+  return new Map(
+    authors.map((item) => [
+      String(item.MATG || "")
+        .trim()
+        .toUpperCase(),
+      String(item.Hoten || "").trim(),
+    ]),
+  );
+};
+
+const buildGenreNameMap = async () => {
+  const genres = await Genre.find({ MATL: { $exists: true, $ne: null } })
+    .select("MATL name")
+    .lean();
+
+  return new Map(
+    genres.map((item) => [
+      String(item.MATL || "")
+        .trim()
+        .toUpperCase(),
+      String(item.name || "").trim(),
+    ]),
+  );
+};
+
+const enrichBookForResponse = (book, authorNameMap, genreNameMap) => {
+  const data = book?.toObject ? book.toObject() : { ...book };
+  const authorCodes = normalizeCodeArray(data.TACGIA);
+  const genreCodes = normalizeCodeArray(data.THELOAI);
+
+  return {
+    ...data,
+    TACGIA: authorCodes,
+    THELOAI: genreCodes,
+    TACGIA_TEN: authorCodes.map((code) => authorNameMap.get(code) || code),
+    THELOAI_TEN: genreCodes.map((code) => genreNameMap.get(code) || code),
+  };
+};
+
+const validateAuthorCodes = async (codes) => {
+  if (!codes.length) return;
+
+  const existing = await Author.find({ MATG: { $in: codes } })
+    .select("MATG")
+    .lean();
+
+  const existingSet = new Set(
+    existing.map((item) =>
+      String(item.MATG || "")
+        .trim()
+        .toUpperCase(),
+    ),
+  );
+  const missing = codes.filter((code) => !existingSet.has(code));
+
+  if (missing.length) {
+    throw new Error(`Mã tác giả không tồn tại: ${missing.join(", ")}`);
+  }
+};
+
+const validateGenreCodes = async (codes) => {
+  if (!codes.length) return;
+
+  const existing = await Genre.find({ MATL: { $in: codes } })
+    .select("MATL")
+    .lean();
+
+  const existingSet = new Set(
+    existing.map((item) =>
+      String(item.MATL || "")
+        .trim()
+        .toUpperCase(),
+    ),
+  );
+  const missing = codes.filter((code) => !existingSet.has(code));
+
+  if (missing.length) {
+    throw new Error(`Mã thể loại không tồn tại: ${missing.join(", ")}`);
+  }
+};
 
 const uploadBufferToCloudinary = (buffer, folder) => {
   return new Promise((resolve, reject) => {
@@ -32,6 +147,17 @@ const generateNextBookCode = async () => {
   return `S${String(maxOrder + 1).padStart(3, "0")}`;
 };
 
+const getNextBookCodePreview = async (req, res) => {
+  try {
+    const nextCode = await generateNextBookCode();
+    return res.status(200).json({ nextCode });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Lỗi khi tạo mã sách kế tiếp", error: error.message });
+  }
+};
+
 // Tìm kiếm sách theo nhiều tiêu chí
 const getBooks = async (req, res) => {
   try {
@@ -39,13 +165,28 @@ const getBooks = async (req, res) => {
     const shouldIncludeDeleted =
       String(includeDeleted).toLowerCase() === "true";
     let filter = shouldIncludeDeleted ? {} : { TRANGTHAI: { $ne: "DELETED" } };
-    if (theloai) filter.THELOAI = theloai;
-    if (tacgia) filter.TACGIA = tacgia;
+    if (theloai) {
+      const genres = normalizeCodeArray(theloai);
+      if (genres.length) filter.THELOAI = { $in: genres };
+    }
+    if (tacgia) {
+      const authors = normalizeCodeArray(tacgia);
+      if (authors.length) filter.TACGIA = { $in: authors };
+    }
     if (nhaxuatban) filter.MANXB = nhaxuatban;
     if (tensach) filter.TENSACH = { $regex: tensach, $options: "i" };
 
-    const books = await Book.find(filter).sort({ created_at: -1 });
-    return res.status(200).json(books);
+    const [books, authorNameMap, genreNameMap] = await Promise.all([
+      Book.find(filter).sort({ created_at: -1 }),
+      buildAuthorNameMap(),
+      buildGenreNameMap(),
+    ]);
+
+    const items = books.map((item) =>
+      enrichBookForResponse(item, authorNameMap, genreNameMap),
+    );
+
+    return res.status(200).json(items);
   } catch (error) {
     return res
       .status(500)
@@ -55,16 +196,22 @@ const getBooks = async (req, res) => {
 
 const getBookById = async (req, res) => {
   try {
-    const book = await Book.findOne({
-      _id: req.params.id,
-      TRANGTHAI: { $ne: "DELETED" },
-    });
+    const [book, authorNameMap, genreNameMap] = await Promise.all([
+      Book.findOne({
+        _id: req.params.id,
+        TRANGTHAI: { $ne: "DELETED" },
+      }),
+      buildAuthorNameMap(),
+      buildGenreNameMap(),
+    ]);
 
     if (!book) {
       return res.status(404).json({ message: "Không tìm thấy sách" });
     }
 
-    return res.status(200).json(book);
+    return res
+      .status(200)
+      .json(enrichBookForResponse(book, authorNameMap, genreNameMap));
   } catch (error) {
     return res
       .status(500)
@@ -75,8 +222,13 @@ const getBookById = async (req, res) => {
 const createBook = async (req, res) => {
   try {
     const payload = { ...req.body };
+    payload.TACGIA = normalizeCodeArray(payload.TACGIA);
+    payload.THELOAI = normalizeCodeArray(payload.THELOAI);
     payload.TRANGTHAI = "ACTIVE";
     payload.DA_XOA_LUC = null;
+
+    await validateAuthorCodes(payload.TACGIA);
+    await validateGenreCodes(payload.THELOAI);
 
     for (let retry = 0; retry < 3; retry += 1) {
       payload.MASACH = await generateNextBookCode();
@@ -116,6 +268,14 @@ const updateBook = async (req, res) => {
     delete sanitizedPayload.MASACH;
     delete sanitizedPayload.TRANGTHAI;
     delete sanitizedPayload.DA_XOA_LUC;
+    if (Object.prototype.hasOwnProperty.call(sanitizedPayload, "TACGIA")) {
+      sanitizedPayload.TACGIA = normalizeCodeArray(sanitizedPayload.TACGIA);
+      await validateAuthorCodes(sanitizedPayload.TACGIA);
+    }
+    if (Object.prototype.hasOwnProperty.call(sanitizedPayload, "THELOAI")) {
+      sanitizedPayload.THELOAI = normalizeCodeArray(sanitizedPayload.THELOAI);
+      await validateGenreCodes(sanitizedPayload.THELOAI);
+    }
 
     const updatedBook = await Book.findByIdAndUpdate(
       req.params.id,
@@ -208,6 +368,7 @@ const uploadBookCoverImage = async (req, res) => {
 };
 
 module.exports = {
+  getNextBookCodePreview,
   getBooks,
   getBookById,
   createBook,

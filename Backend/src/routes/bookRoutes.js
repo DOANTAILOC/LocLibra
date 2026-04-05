@@ -1,5 +1,6 @@
 const express = require("express");
 const {
+  getNextBookCodePreview,
   getBooks,
   getBookById,
   createBook,
@@ -16,6 +17,12 @@ const { uploadBookCover } = require("../middlewares/uploadMiddleware");
 const router = express.Router();
 
 router.get("/", getBooks);
+router.get(
+  "/next-code",
+  authenticate,
+  authorizeRoles("staff"),
+  getNextBookCodePreview,
+);
 router.post(
   "/upload-cover",
   authenticate,

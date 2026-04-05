@@ -13,6 +13,8 @@
     :columns="columns"
     :form-fields="formFields"
     :detail-fields="detailFields"
+    auto-code-field-key="MANXB"
+    auto-code-endpoint="/admin/publishers/next-code"
   />
 </template>
 

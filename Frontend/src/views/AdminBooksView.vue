@@ -379,10 +379,10 @@
 
     <div
       v-if="showCreateModal"
-      class="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4"
+      class="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-6"
     >
       <div
-        class="w-full max-w-2xl rounded-2xl bg-[var(--surface-container-lowest)] p-6 shadow-2xl"
+        class="w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-2xl bg-[var(--surface-container-lowest)] p-6 shadow-2xl"
       >
         <div class="mb-5 flex items-center justify-between">
           <h3 class="text-2xl">
@@ -401,6 +401,26 @@
           class="grid grid-cols-1 gap-4 md:grid-cols-2"
           @submit.prevent="handleSubmitBook"
         >
+          <div class="space-y-1 md:col-span-2">
+            <label class="form-label">Ảnh bìa sách</label>
+            <input
+              type="file"
+              accept="image/*"
+              class="form-input"
+              @change="handleCoverFileChange"
+            />
+            <p class="text-xs text-[var(--on-surface-variant)]">
+              Chấp nhận ảnh JPG/PNG/WebP, tối đa 5MB.
+            </p>
+            <div v-if="coverPreview || newBook.ANHBIA_URL" class="pt-2">
+              <img
+                :src="coverPreview || newBook.ANHBIA_URL"
+                alt="Xem trước ảnh bìa"
+                class="h-28 w-20 rounded-lg border border-[rgb(184_188_163/25%)] object-cover"
+              />
+            </div>
+          </div>
+
           <div v-if="modalMode === 'edit'" class="space-y-1">
             <label class="form-label">Mã sách</label>
             <input
@@ -415,7 +435,7 @@
             <input
               class="form-input"
               type="text"
-              value="Tự động sinh theo dạng S + số thứ tự"
+              :value="nextGeneratedCode || 'Đang sinh mã...'"
               readonly
             />
           </div>
@@ -431,23 +451,50 @@
           </div>
           <div class="space-y-1">
             <label class="form-label">Tác giả</label>
-            <input
-              v-model.trim="newBook.TACGIA"
+            <select
+              v-model="newBook.TACGIA"
               required
-              class="form-input"
-              type="text"
-              placeholder="Tên tác giả"
-            />
+              multiple
+              class="form-input min-h-[96px]"
+            >
+              <option
+                v-for="author in authorOptions"
+                :key="author.MATG"
+                :value="author.MATG"
+              >
+                {{ author.Hoten }} ({{ author.MATG }})
+              </option>
+            </select>
+            <p class="text-xs text-[var(--on-surface-variant)]">
+              Giữ Ctrl/Cmd để chọn nhiều tác giả.
+            </p>
+            <button
+              type="button"
+              class="text-xs font-semibold text-[var(--primary)] hover:underline"
+              @click="openMetaCreateModal('author')"
+            >
+              + Thêm tác giả mới
+            </button>
           </div>
           <div class="space-y-1">
-            <label class="form-label">Nhà xuất bản (MANXB)</label>
-            <input
-              v-model.trim="newBook.MANXB"
-              required
-              class="form-input"
-              type="text"
-              placeholder="VD: NXB001"
-            />
+            <label class="form-label">Nhà xuất bản</label>
+            <select v-model="newBook.MANXB" required class="form-input">
+              <option value="" disabled>Chọn nhà xuất bản</option>
+              <option
+                v-for="publisher in publisherOptions"
+                :key="publisher.MANXB"
+                :value="publisher.MANXB"
+              >
+                {{ publisher.TENNXB }} ({{ publisher.MANXB }})
+              </option>
+            </select>
+            <button
+              type="button"
+              class="text-xs font-semibold text-[var(--primary)] hover:underline"
+              @click="openMetaCreateModal('publisher')"
+            >
+              + Thêm nhà xuất bản mới
+            </button>
           </div>
           <div class="space-y-1">
             <label class="form-label">Đơn giá</label>
@@ -482,40 +529,37 @@
           </div>
           <div class="space-y-1">
             <label class="form-label">Thể loại</label>
-            <input
-              v-model.trim="newBook.THELOAI"
-              class="form-input"
-              type="text"
-              placeholder="VD: Công nghệ"
-            />
+            <select
+              v-model="newBook.THELOAI"
+              multiple
+              class="form-input min-h-[96px]"
+            >
+              <option
+                v-for="genre in allGenreOptions"
+                :key="genre.MATL"
+                :value="genre.MATL"
+              >
+                {{ genre.name }} ({{ genre.MATL }})
+              </option>
+            </select>
+            <p class="text-xs text-[var(--on-surface-variant)]">
+              Giữ Ctrl/Cmd để chọn nhiều thể loại.
+            </p>
+            <button
+              type="button"
+              class="text-xs font-semibold text-[var(--primary)] hover:underline"
+              @click="openMetaCreateModal('genre')"
+            >
+              + Thêm thể loại mới
+            </button>
           </div>
           <div class="space-y-1 md:col-span-2">
             <label class="form-label">Mô tả ngắn</label>
             <textarea
               v-model.trim="newBook.MOTA_NGAN"
-              class="form-input min-h-[90px]"
+              class="form-input min-h-[72px]"
               placeholder="Nhập mô tả ngắn..."
             ></textarea>
-          </div>
-
-          <div class="space-y-1 md:col-span-2">
-            <label class="form-label">Ảnh bìa sách</label>
-            <input
-              type="file"
-              accept="image/*"
-              class="form-input"
-              @change="handleCoverFileChange"
-            />
-            <p class="text-xs text-[var(--on-surface-variant)]">
-              Chấp nhận ảnh JPG/PNG/WebP, tối đa 5MB.
-            </p>
-            <div v-if="coverPreview || newBook.ANHBIA_URL" class="pt-2">
-              <img
-                :src="coverPreview || newBook.ANHBIA_URL"
-                alt="Xem trước ảnh bìa"
-                class="h-28 w-20 rounded-lg border border-[rgb(184_188_163/25%)] object-cover"
-              />
-            </div>
           </div>
 
           <div class="mt-2 flex justify-end gap-2 md:col-span-2">
@@ -540,6 +584,120 @@
                     ? "Cập nhật sách"
                     : "Tạo sách"
               }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div
+      v-if="showMetaCreateModal"
+      class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 px-4"
+    >
+      <div
+        class="w-full max-w-lg rounded-2xl bg-[var(--surface-container-lowest)] p-6 shadow-2xl"
+      >
+        <div class="mb-5 flex items-center justify-between">
+          <h3 class="text-2xl">{{ metaModalTitle }}</h3>
+          <button
+            type="button"
+            class="rounded-lg p-1.5 transition hover:bg-[var(--surface-container-highest)]"
+            @click="closeMetaCreateModal"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <form class="space-y-4" @submit.prevent="submitMetaCreate">
+          <div v-if="metaCreateType === 'author'" class="space-y-3">
+            <div class="space-y-1">
+              <label class="form-label">Tên tác giả</label>
+              <input
+                v-model.trim="metaForm.Hoten"
+                required
+                class="form-input"
+                type="text"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="form-label">Quốc tịch</label>
+              <input
+                v-model.trim="metaForm.QuocTich"
+                class="form-input"
+                type="text"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="form-label">Tiểu sử</label>
+              <textarea
+                v-model.trim="metaForm.TieuSu"
+                class="form-input min-h-[90px]"
+              ></textarea>
+            </div>
+          </div>
+
+          <div v-else-if="metaCreateType === 'genre'" class="space-y-3">
+            <div class="space-y-1">
+              <label class="form-label">Tên thể loại</label>
+              <input
+                v-model.trim="metaForm.name"
+                required
+                class="form-input"
+                type="text"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="form-label">Mô tả</label>
+              <textarea
+                v-model.trim="metaForm.description"
+                class="form-input min-h-[90px]"
+              ></textarea>
+            </div>
+          </div>
+
+          <div v-else class="space-y-3">
+            <div class="space-y-1">
+              <label class="form-label">Mã nhà xuất bản</label>
+              <input
+                v-model.trim="metaForm.MANXB"
+                required
+                class="form-input"
+                type="text"
+                placeholder="VD: NXB001"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="form-label">Tên nhà xuất bản</label>
+              <input
+                v-model.trim="metaForm.TENNXB"
+                required
+                class="form-input"
+                type="text"
+              />
+            </div>
+            <div class="space-y-1">
+              <label class="form-label">Địa chỉ</label>
+              <textarea
+                v-model.trim="metaForm.DIACHI"
+                class="form-input min-h-[90px]"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              class="btn-secondary px-4 py-2 text-sm"
+              @click="closeMetaCreateModal"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              class="btn-primary px-4 py-2 text-sm"
+              :disabled="isCreatingMeta"
+            >
+              {{ isCreatingMeta ? "Đang lưu..." : "Lưu" }}
             </button>
           </div>
         </form>
@@ -576,28 +734,94 @@ const newBook = ref(getEmptyBookForm());
 const modalMode = ref("create");
 const coverFile = ref(null);
 const coverPreview = ref("");
+const authorsCatalog = ref([]);
+const genresCatalog = ref([]);
+const publishersCatalog = ref([]);
+const nextGeneratedCode = ref("");
+const showMetaCreateModal = ref(false);
+const isCreatingMeta = ref(false);
+const metaCreateType = ref("author");
+const metaForm = ref(getEmptyMetaForm("author"));
+
+function getEmptyMetaForm(type) {
+  if (type === "author") {
+    return { Hoten: "", QuocTich: "", TieuSu: "" };
+  }
+
+  if (type === "genre") {
+    return { name: "", description: "" };
+  }
+
+  return { MANXB: "", TENNXB: "", DIACHI: "" };
+}
 
 function getEmptyBookForm() {
   return {
     id: "",
     MASACH: "",
     TENSACH: "",
-    TACGIA: "",
+    TACGIA: [],
     MANXB: "",
     DONGIA: 0,
     SOQUYEN: 1,
     NAMXUATBAN: new Date().getFullYear(),
-    THELOAI: "",
+    THELOAI: [],
     MOTA_NGAN: "",
     ANHBIA_URL: "",
     ANHBIA_PUBLIC_ID: "",
   };
 }
 
+function toArrayField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 const genreOptions = computed(() => {
   return [
-    ...new Set(books.value.map((item) => item.category).filter(Boolean)),
+    ...new Set(
+      books.value.flatMap((item) =>
+        Array.isArray(item.categoryLabels) ? item.categoryLabels : [],
+      ),
+    ),
   ].sort((a, b) => a.localeCompare(b));
+});
+
+const authorOptions = computed(() => {
+  return [...authorsCatalog.value]
+    .filter((item) => item?.MATG && item?.Hoten)
+    .sort((a, b) => String(a.Hoten).localeCompare(String(b.Hoten), "vi"));
+});
+
+const allGenreOptions = computed(() => {
+  return [...genresCatalog.value]
+    .filter((item) => item?.MATL && item?.name)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "vi"));
+});
+
+const metaModalTitle = computed(() => {
+  if (metaCreateType.value === "author") return "Thêm tác giả";
+  if (metaCreateType.value === "genre") return "Thêm thể loại";
+  return "Thêm nhà xuất bản";
+});
+
+const publisherOptions = computed(() => {
+  return [...publishersCatalog.value].sort((a, b) =>
+    String(a.TENNXB || a.MANXB || "").localeCompare(
+      String(b.TENNXB || b.MANXB || ""),
+      "vi",
+    ),
+  );
 });
 
 const filteredBooks = computed(() => {
@@ -606,7 +830,7 @@ const filteredBooks = computed(() => {
   return books.value.filter((item) => {
     if (
       categoryFilter.value !== "ALL" &&
-      item.category !== categoryFilter.value
+      !item.categoryLabels.includes(categoryFilter.value)
     ) {
       return false;
     }
@@ -670,6 +894,38 @@ function getStockMeta(quantity) {
 }
 
 function mapBook(item) {
+  const authors = toArrayField(item.TACGIA);
+  const categories = toArrayField(item.THELOAI);
+  const authorLabelsRaw = toArrayField(item.TACGIA_TEN);
+  const categoryLabelsRaw = toArrayField(item.THELOAI_TEN);
+  const authorByCode = new Map(
+    authorsCatalog.value.map((entry) => [
+      String(entry.MATG || "")
+        .trim()
+        .toUpperCase(),
+      String(entry.Hoten || "").trim(),
+    ]),
+  );
+  const genreByCode = new Map(
+    genresCatalog.value.map((entry) => [
+      String(entry.MATL || "")
+        .trim()
+        .toUpperCase(),
+      String(entry.name || "").trim(),
+    ]),
+  );
+  const authorLabels =
+    authorLabelsRaw.length > 0
+      ? authorLabelsRaw
+      : authors.map(
+          (code) => authorByCode.get(String(code).toUpperCase()) || code,
+        );
+  const categoryLabels =
+    categoryLabelsRaw.length > 0
+      ? categoryLabelsRaw
+      : categories.map(
+          (code) => genreByCode.get(String(code).toUpperCase()) || code,
+        );
   const isDeleted = item.TRANGTHAI === "DELETED";
   const stockMeta = isDeleted
     ? {
@@ -685,8 +941,10 @@ function mapBook(item) {
     id: item._id,
     code: item.MASACH || "---",
     title: item.TENSACH || "Chưa có tên sách",
-    author: item.TACGIA || "Chưa có tác giả",
-    category: item.THELOAI || "Chưa phân loại",
+    author: authorLabels.length ? authorLabels.join(", ") : "Chưa có tác giả",
+    category: categoryLabels.length
+      ? categoryLabels.join(", ")
+      : "Chưa phân loại",
     publishedYear: item.NAMXUATBAN || "---",
     quantity: item.SOQUYEN || 0,
     price: item.DONGIA || 0,
@@ -695,6 +953,10 @@ function mapBook(item) {
     description: item.MOTA_NGAN || "Chưa có mô tả ngắn cho đầu sách này.",
     coverUrl: item.ANHBIA_URL || "",
     coverPublicId: item.ANHBIA_PUBLIC_ID || "",
+    authors,
+    categories,
+    authorLabels,
+    categoryLabels,
     isDeleted,
     ...stockMeta,
   };
@@ -711,20 +973,6 @@ function normalizeError(error) {
     error?.message ||
     "Không thể tải dữ liệu kho sách"
   );
-}
-
-function getNextBookCodeFromClient() {
-  const maxOrder = books.value.reduce((max, item) => {
-    const matched = String(item.code || "").match(/^S(\d+)$/i);
-    if (!matched) return max;
-
-    const order = Number.parseInt(matched[1], 10);
-    if (Number.isNaN(order)) return max;
-
-    return Math.max(max, order);
-  }, 0);
-
-  return `S${String(maxOrder + 1).padStart(3, "0")}`;
 }
 
 async function fetchBooks() {
@@ -746,13 +994,101 @@ async function fetchBooks() {
   }
 }
 
-function openCreateModal() {
+async function fetchMetadata() {
+  try {
+    const [authorsRes, genresRes, publishersRes] = await Promise.all([
+      api.get("/admin/authors"),
+      api.get("/admin/genres"),
+      api.get("/admin/publishers"),
+    ]);
+
+    authorsCatalog.value = authorsRes.data?.items || [];
+    genresCatalog.value = genresRes.data?.items || [];
+    publishersCatalog.value = publishersRes.data?.items || [];
+    if (books.value.length) await fetchBooks();
+  } catch (error) {
+    errorMessage.value = normalizeError(error);
+  }
+}
+
+async function fetchNextGeneratedCode() {
+  try {
+    const response = await api.get("/books/next-code");
+    nextGeneratedCode.value = response.data?.nextCode || "";
+  } catch (error) {
+    nextGeneratedCode.value = "";
+    errorMessage.value = normalizeError(error);
+  }
+}
+
+function openMetaCreateModal(type) {
+  metaCreateType.value = type;
+  metaForm.value = getEmptyMetaForm(type);
+  showCreateModal.value = false;
+  showMetaCreateModal.value = true;
+}
+
+function closeMetaCreateModal() {
+  showMetaCreateModal.value = false;
+  showCreateModal.value = true;
+}
+
+async function submitMetaCreate() {
+  isCreatingMeta.value = true;
+  errorMessage.value = "";
+
+  try {
+    if (metaCreateType.value === "author") {
+      const payload = {
+        Hoten: String(metaForm.value.Hoten || "").trim(),
+        QuocTich: String(metaForm.value.QuocTich || "").trim(),
+        TieuSu: String(metaForm.value.TieuSu || "").trim(),
+      };
+      const response = await api.post("/admin/authors", payload);
+      await fetchMetadata();
+      const createdCode = String(response.data?.MATG || "").trim();
+      if (createdCode && !newBook.value.TACGIA.includes(createdCode)) {
+        newBook.value.TACGIA = [...newBook.value.TACGIA, createdCode];
+      }
+    } else if (metaCreateType.value === "genre") {
+      const payload = {
+        name: String(metaForm.value.name || "").trim(),
+        description: String(metaForm.value.description || "").trim(),
+      };
+      const response = await api.post("/admin/genres", payload);
+      await fetchMetadata();
+      const createdCode = String(response.data?.MATL || "").trim();
+      if (createdCode && !newBook.value.THELOAI.includes(createdCode)) {
+        newBook.value.THELOAI = [...newBook.value.THELOAI, createdCode];
+      }
+    } else {
+      const payload = {
+        MANXB: String(metaForm.value.MANXB || "").trim(),
+        TENNXB: String(metaForm.value.TENNXB || "").trim(),
+        DIACHI: String(metaForm.value.DIACHI || "").trim(),
+      };
+      await api.post("/admin/publishers", payload);
+      await fetchMetadata();
+      newBook.value.MANXB = payload.MANXB;
+    }
+
+    showMetaCreateModal.value = false;
+    showCreateModal.value = true;
+  } catch (error) {
+    errorMessage.value = normalizeError(error);
+  } finally {
+    isCreatingMeta.value = false;
+  }
+}
+
+async function openCreateModal() {
   errorMessage.value = "";
   successMessage.value = "";
   modalMode.value = "create";
   newBook.value = getEmptyBookForm();
   coverFile.value = null;
   coverPreview.value = "";
+  await fetchNextGeneratedCode();
   showCreateModal.value = true;
 }
 
@@ -764,12 +1100,12 @@ function openEditModal(book) {
     id: book.id,
     MASACH: book.code,
     TENSACH: book.title,
-    TACGIA: book.author,
+    TACGIA: [...book.authors],
     MANXB: book.publisher,
     DONGIA: book.price,
     SOQUYEN: book.quantity,
     NAMXUATBAN: book.publishedYear === "---" ? "" : book.publishedYear,
-    THELOAI: book.category === "Chưa phân loại" ? "" : book.category,
+    THELOAI: [...book.categories],
     MOTA_NGAN:
       book.description === "Chưa có mô tả ngắn cho đầu sách này."
         ? ""
@@ -833,6 +1169,16 @@ async function handleSubmitBook() {
   successMessage.value = "";
 
   try {
+    if (!newBook.value.TACGIA.length) {
+      errorMessage.value = "Vui lòng chọn ít nhất một tác giả";
+      return;
+    }
+
+    if (!newBook.value.MANXB) {
+      errorMessage.value = "Vui lòng chọn nhà xuất bản";
+      return;
+    }
+
     const uploadedCover = await uploadCoverIfNeeded();
 
     const payload = {
@@ -848,9 +1194,6 @@ async function handleSubmitBook() {
       MOTA_NGAN: newBook.value.MOTA_NGAN,
       ANHBIA_URL: uploadedCover.url,
       ANHBIA_PUBLIC_ID: uploadedCover.publicId,
-      ...(modalMode.value === "edit"
-        ? { MASACH: newBook.value.MASACH }
-        : { MASACH: getNextBookCodeFromClient() }),
     };
 
     if (modalMode.value === "edit") {
@@ -893,5 +1236,7 @@ async function handleDeleteBook(book) {
   }
 }
 
-onMounted(fetchBooks);
+onMounted(async () => {
+  await Promise.all([fetchBooks(), fetchMetadata()]);
+});
 </script>

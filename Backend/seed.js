@@ -5,6 +5,8 @@ require("dotenv").config({ path: path.resolve(__dirname, ".env") });
 const Reader = require("./src/models/Reader");
 const Staff = require("./src/models/Staff");
 const Book = require("./src/models/Book");
+const Author = require("./src/models/Author");
+const Genre = require("./src/models/Genre");
 const Borrow = require("./src/models/Borrow");
 const Publisher = require("./src/models/Publisher");
 const Vote = require("./src/models/Vote");
@@ -63,6 +65,33 @@ const publishers = [
   },
 ];
 
+const authors = [
+  { MATG: "TG001", Hoten: "Nguyễn Minh Hoàng" },
+  { MATG: "TG002", Hoten: "Trần Quốc Huy" },
+  { MATG: "TG003", Hoten: "Lê Thu Hà" },
+  { MATG: "TG004", Hoten: "Phạm Thanh Nam" },
+  { MATG: "TG005", Hoten: "Đỗ Minh Tâm" },
+  { MATG: "TG006", Hoten: "Ngô Gia Bảo" },
+  { MATG: "TG007", Hoten: "Trần Khánh Vy" },
+  { MATG: "TG008", Hoten: "Lê Quang Huy" },
+  { MATG: "TG009", Hoten: "Nguyễn Thùy Linh" },
+  { MATG: "TG010", Hoten: "Phan Hữu Đức" },
+  { MATG: "TG011", Hoten: "Bùi Quốc Anh" },
+  { MATG: "TG012", Hoten: "Võ Thành Công" },
+  { MATG: "TG013", Hoten: "Hoàng Minh Trí" },
+];
+
+const genres = [
+  { MATL: "TL001", name: "Công nghệ thông tin" },
+  { MATL: "TL002", name: "Giáo trình" },
+  { MATL: "TL003", name: "Khoa học dữ liệu" },
+  { MATL: "TL004", name: "Thiết kế" },
+  { MATL: "TL005", name: "Kỹ năng sống" },
+  { MATL: "TL006", name: "Tâm lý" },
+  { MATL: "TL007", name: "Lịch sử" },
+  { MATL: "TL008", name: "Kinh doanh" },
+];
+
 const books = [
   {
     MASACH: "S001",
@@ -72,8 +101,8 @@ const books = [
     SOQUYEN: 12,
     NAMXUATBAN: 2022,
     MANXB: "NXB001",
-    TACGIA: "Nguyễn Minh Hoàng",
-    THELOAI: "Công nghệ thông tin",
+    TACGIA: ["TG001"],
+    THELOAI: ["TL001"],
   },
   {
     MASACH: "S002",
@@ -83,8 +112,8 @@ const books = [
     SOQUYEN: 8,
     NAMXUATBAN: 2021,
     MANXB: "NXB002",
-    TACGIA: "Trần Quốc Huy",
-    THELOAI: "Giáo trình",
+    TACGIA: ["TG002"],
+    THELOAI: ["TL002"],
   },
   {
     MASACH: "S003",
@@ -94,8 +123,8 @@ const books = [
     SOQUYEN: 10,
     NAMXUATBAN: 2020,
     MANXB: "NXB001",
-    TACGIA: "Lê Thu Hà",
-    THELOAI: "Công nghệ thông tin",
+    TACGIA: ["TG003"],
+    THELOAI: ["TL001"],
   },
   {
     MASACH: "S004",
@@ -106,8 +135,8 @@ const books = [
     SOQUYEN: 9,
     NAMXUATBAN: 2023,
     MANXB: "NXB001",
-    TACGIA: "Phạm Thanh Nam",
-    THELOAI: "Công nghệ thông tin",
+    TACGIA: ["TG004"],
+    THELOAI: ["TL001"],
   },
   {
     MASACH: "S005",
@@ -117,8 +146,8 @@ const books = [
     SOQUYEN: 15,
     NAMXUATBAN: 2022,
     MANXB: "NXB002",
-    TACGIA: "Đỗ Minh Tâm",
-    THELOAI: "Giáo trình",
+    TACGIA: ["TG005"],
+    THELOAI: ["TL002"],
   },
   {
     MASACH: "S006",
@@ -129,8 +158,8 @@ const books = [
     SOQUYEN: 6,
     NAMXUATBAN: 2024,
     MANXB: "NXB001",
-    TACGIA: "Ngô Gia Bảo",
-    THELOAI: "Khoa học dữ liệu",
+    TACGIA: ["TG006"],
+    THELOAI: ["TL003"],
   },
   {
     MASACH: "S007",
@@ -141,8 +170,8 @@ const books = [
     SOQUYEN: 11,
     NAMXUATBAN: 2021,
     MANXB: "NXB002",
-    TACGIA: "Trần Khánh Vy",
-    THELOAI: "Thiết kế",
+    TACGIA: ["TG007"],
+    THELOAI: ["TL004"],
   },
   {
     MASACH: "S008",
@@ -153,8 +182,8 @@ const books = [
     SOQUYEN: 7,
     NAMXUATBAN: 2020,
     MANXB: "NXB001",
-    TACGIA: "Lê Quang Huy",
-    THELOAI: "Công nghệ thông tin",
+    TACGIA: ["TG008"],
+    THELOAI: ["TL001"],
   },
   {
     MASACH: "S009",
@@ -165,8 +194,8 @@ const books = [
     SOQUYEN: 20,
     NAMXUATBAN: 2019,
     MANXB: "NXB002",
-    TACGIA: "Nguyễn Thùy Linh",
-    THELOAI: "Kỹ năng sống",
+    TACGIA: ["TG009"],
+    THELOAI: ["TL005"],
   },
   {
     MASACH: "S010",
@@ -177,8 +206,8 @@ const books = [
     SOQUYEN: 10,
     NAMXUATBAN: 2022,
     MANXB: "NXB001",
-    TACGIA: "Phan Hữu Đức",
-    THELOAI: "Tâm lý",
+    TACGIA: ["TG010"],
+    THELOAI: ["TL006"],
   },
   {
     MASACH: "S011",
@@ -189,8 +218,8 @@ const books = [
     SOQUYEN: 13,
     NAMXUATBAN: 2018,
     MANXB: "NXB002",
-    TACGIA: "Bùi Quốc Anh",
-    THELOAI: "Lịch sử",
+    TACGIA: ["TG011"],
+    THELOAI: ["TL007"],
   },
   {
     MASACH: "S012",
@@ -200,8 +229,8 @@ const books = [
     SOQUYEN: 8,
     NAMXUATBAN: 2021,
     MANXB: "NXB001",
-    TACGIA: "Võ Thành Công",
-    THELOAI: "Giáo trình",
+    TACGIA: ["TG012"],
+    THELOAI: ["TL002"],
   },
   {
     MASACH: "S013",
@@ -212,8 +241,8 @@ const books = [
     SOQUYEN: 14,
     NAMXUATBAN: 2023,
     MANXB: "NXB002",
-    TACGIA: "Hoàng Minh Trí",
-    THELOAI: "Kinh doanh",
+    TACGIA: ["TG013"],
+    THELOAI: ["TL008"],
   },
 ];
 
@@ -229,6 +258,8 @@ async function seedDatabase() {
     Vote.deleteMany({}),
     Borrow.deleteMany({}),
     Book.deleteMany({}),
+    Author.deleteMany({}),
+    Genre.deleteMany({}),
     Reader.deleteMany({}),
     Staff.deleteMany({}),
     Publisher.deleteMany({}),
@@ -237,6 +268,8 @@ async function seedDatabase() {
   await Reader.insertMany(readers);
   await Staff.create(staffs);
   await Publisher.insertMany(publishers);
+  await Author.insertMany(authors);
+  await Genre.insertMany(genres);
   await Book.insertMany(books);
 
   const borrows = [

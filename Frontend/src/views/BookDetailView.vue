@@ -92,7 +92,7 @@
             <p
               class="text-[11px] uppercase tracking-[0.1em] text-[var(--on-surface-variant)]"
             >
-              {{ item.TACGIA || "Chưa rõ" }}
+              {{ authorTextByBook(item) }}
             </p>
           </article>
         </div>
@@ -133,9 +133,14 @@ const isAvailable = computed(() => Number(book.value?.SOQUYEN || 0) > 0);
 const detailItems = computed(() => {
   if (!book.value) return [];
 
+  const genres = toArrayField(book.value.THELOAI);
+
   return [
     { label: "Mã sách", value: book.value.MASACH || "Chưa rõ" },
-    { label: "Thể loại", value: book.value.THELOAI || "Chưa phân loại" },
+    {
+      label: "Thể loại",
+      value: genres.length ? genres.join(", ") : "Chưa phân loại",
+    },
     { label: "Nhà xuất bản", value: book.value.MANXB || "Chưa rõ" },
     { label: "Năm xuất bản", value: book.value.NAMXUATBAN || "Chưa rõ" },
     { label: "Đơn giá", value: formatCurrency(book.value.DONGIA) },
@@ -171,6 +176,26 @@ function coverByBook(item) {
 
   const seed = encodeURIComponent(item.MASACH || item.TENSACH || "book");
   return `https://picsum.photos/seed/${seed}/900/1300`;
+}
+
+function toArrayField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+function authorTextByBook(item) {
+  const authors = toArrayField(item?.TACGIA);
+  return authors.length ? authors.join(", ") : "Chưa rõ";
 }
 
 function formatCurrency(value) {
@@ -302,7 +327,11 @@ async function fetchBookDetail() {
     const [voteRes, relatedRes] = await Promise.all([
       api.get(`/votes/books/${data.MASACH}`).catch(() => ({ data: null })),
       api
-        .get("/books", { params: { theloai: data.THELOAI } })
+        .get("/books", {
+          params: {
+            theloai: toArrayField(data.THELOAI)[0] || undefined,
+          },
+        })
         .catch(() => ({ data: [] })),
     ]);
 

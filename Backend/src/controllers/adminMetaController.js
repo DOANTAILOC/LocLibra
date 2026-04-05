@@ -5,6 +5,48 @@ const Publisher = require("../models/Publisher");
 
 const toRegex = (q) => ({ $regex: q, $options: "i" });
 
+const generateNextPublisherCode = async () => {
+  const existing = await Publisher.find({ MANXB: /^NXB\d+$/i })
+    .select("MANXB")
+    .lean();
+
+  const maxOrder = existing.reduce((max, item) => {
+    const order = Number.parseInt(String(item.MANXB).replace(/^NXB/i, ""), 10);
+    if (Number.isNaN(order)) return max;
+    return Math.max(max, order);
+  }, 0);
+
+  return `NXB${String(maxOrder + 1).padStart(3, "0")}`;
+};
+
+const generateNextAuthorCode = async () => {
+  const existing = await Author.find({ MATG: /^TG\d+$/i })
+    .select("MATG")
+    .lean();
+
+  const maxOrder = existing.reduce((max, item) => {
+    const order = Number.parseInt(String(item.MATG).replace(/^TG/i, ""), 10);
+    if (Number.isNaN(order)) return max;
+    return Math.max(max, order);
+  }, 0);
+
+  return `TG${String(maxOrder + 1).padStart(3, "0")}`;
+};
+
+const generateNextGenreCode = async () => {
+  const existing = await Genre.find({ MATL: /^TL\d+$/i })
+    .select("MATL")
+    .lean();
+
+  const maxOrder = existing.reduce((max, item) => {
+    const order = Number.parseInt(String(item.MATL).replace(/^TL/i, ""), 10);
+    if (Number.isNaN(order)) return max;
+    return Math.max(max, order);
+  }, 0);
+
+  return `TL${String(maxOrder + 1).padStart(3, "0")}`;
+};
+
 const normalizeError = (res, message, error, status = 500) => {
   return res.status(status).json({ message, error: error.message });
 };
@@ -12,7 +54,15 @@ const normalizeError = (res, message, error, status = 500) => {
 const getAuthors = async (req, res) => {
   try {
     const { q } = req.query;
-    const filter = q ? { Hoten: toRegex(q) } : {};
+    let filter = {};
+
+    if (q) {
+      const keyword = toRegex(q);
+      filter = {
+        $or: [{ MATG: keyword }, { Hoten: keyword }, { QuocTich: keyword }],
+      };
+    }
+
     const items = await Author.find(filter).sort({ created_at: -1 });
     return res.status(200).json({ items });
   } catch (error) {
@@ -20,10 +70,39 @@ const getAuthors = async (req, res) => {
   }
 };
 
+const getNextAuthorCodePreview = async (req, res) => {
+  try {
+    const nextCode = await generateNextAuthorCode();
+    return res.status(200).json({ nextCode });
+  } catch (error) {
+    return normalizeError(res, "Lỗi khi tạo mã tác giả kế tiếp", error);
+  }
+};
+
 const createAuthor = async (req, res) => {
   try {
-    const item = await Author.create(req.body);
-    return res.status(201).json(item);
+    const payload = {
+      Hoten: req.body?.Hoten,
+      TieuSu: req.body?.TieuSu,
+      QuocTich: req.body?.QuocTich,
+    };
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      payload.MATG = await generateNextAuthorCode();
+
+      try {
+        const item = await Author.create(payload);
+        return res.status(201).json(item);
+      } catch (error) {
+        const isDuplicateCode =
+          error?.code === 11000 && error?.keyPattern?.MATG;
+        if (!isDuplicateCode || retry === 2) {
+          throw error;
+        }
+      }
+    }
+
+    return res.status(500).json({ message: "Không thể tạo mã tác giả" });
   } catch (error) {
     return normalizeError(res, "Lỗi khi tạo tác giả", error, 400);
   }
@@ -31,7 +110,10 @@ const createAuthor = async (req, res) => {
 
 const updateAuthor = async (req, res) => {
   try {
-    const item = await Author.findByIdAndUpdate(req.params.id, req.body, {
+    const payload = { ...req.body };
+    delete payload.MATG;
+
+    const item = await Author.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
     });
@@ -62,7 +144,15 @@ const deleteAuthor = async (req, res) => {
 const getGenres = async (req, res) => {
   try {
     const { q } = req.query;
-    const filter = q ? { name: toRegex(q) } : {};
+    let filter = {};
+
+    if (q) {
+      const keyword = toRegex(q);
+      filter = {
+        $or: [{ MATL: keyword }, { name: keyword }, { description: keyword }],
+      };
+    }
+
     const items = await Genre.find(filter).sort({ created_at: -1 });
     return res.status(200).json({ items });
   } catch (error) {
@@ -70,10 +160,38 @@ const getGenres = async (req, res) => {
   }
 };
 
+const getNextGenreCodePreview = async (req, res) => {
+  try {
+    const nextCode = await generateNextGenreCode();
+    return res.status(200).json({ nextCode });
+  } catch (error) {
+    return normalizeError(res, "Lỗi khi tạo mã thể loại kế tiếp", error);
+  }
+};
+
 const createGenre = async (req, res) => {
   try {
-    const item = await Genre.create(req.body);
-    return res.status(201).json(item);
+    const payload = {
+      name: req.body?.name,
+      description: req.body?.description,
+    };
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      payload.MATL = await generateNextGenreCode();
+
+      try {
+        const item = await Genre.create(payload);
+        return res.status(201).json(item);
+      } catch (error) {
+        const isDuplicateCode =
+          error?.code === 11000 && error?.keyPattern?.MATL;
+        if (!isDuplicateCode || retry === 2) {
+          throw error;
+        }
+      }
+    }
+
+    return res.status(500).json({ message: "Không thể tạo mã thể loại" });
   } catch (error) {
     return normalizeError(res, "Lỗi khi tạo thể loại", error, 400);
   }
@@ -81,7 +199,10 @@ const createGenre = async (req, res) => {
 
 const updateGenre = async (req, res) => {
   try {
-    const item = await Genre.findByIdAndUpdate(req.params.id, req.body, {
+    const payload = { ...req.body };
+    delete payload.MATL;
+
+    const item = await Genre.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
     });
@@ -190,10 +311,39 @@ const getPublishers = async (req, res) => {
   }
 };
 
+const getNextPublisherCodePreview = async (req, res) => {
+  try {
+    const nextCode = await generateNextPublisherCode();
+    return res.status(200).json({ nextCode });
+  } catch (error) {
+    return normalizeError(res, "Lỗi khi tạo mã nhà xuất bản kế tiếp", error);
+  }
+};
+
 const createPublisher = async (req, res) => {
   try {
-    const item = await Publisher.create(req.body);
-    return res.status(201).json(item);
+    const payload = {
+      TENNXB: req.body?.TENNXB,
+      DIACHI: req.body?.DIACHI,
+    };
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      payload.MANXB = await generateNextPublisherCode();
+
+      try {
+        const item = await Publisher.create(payload);
+        return res.status(201).json(item);
+      } catch (error) {
+        const isDuplicateCode =
+          error?.code === 11000 && error?.keyPattern?.MANXB;
+
+        if (!isDuplicateCode || retry === 2) {
+          throw error;
+        }
+      }
+    }
+
+    return res.status(500).json({ message: "Không thể tạo mã nhà xuất bản" });
   } catch (error) {
     return normalizeError(res, "Lỗi khi tạo nhà xuất bản", error, 400);
   }
@@ -201,7 +351,10 @@ const createPublisher = async (req, res) => {
 
 const updatePublisher = async (req, res) => {
   try {
-    const item = await Publisher.findByIdAndUpdate(req.params.id, req.body, {
+    const payload = { ...req.body };
+    delete payload.MANXB;
+
+    const item = await Publisher.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
     });
@@ -231,10 +384,12 @@ const deletePublisher = async (req, res) => {
 
 module.exports = {
   getAuthors,
+  getNextAuthorCodePreview,
   createAuthor,
   updateAuthor,
   deleteAuthor,
   getGenres,
+  getNextGenreCodePreview,
   createGenre,
   updateGenre,
   deleteGenre,
@@ -243,6 +398,7 @@ module.exports = {
   updateStaff,
   deleteStaff,
   getPublishers,
+  getNextPublisherCodePreview,
   createPublisher,
   updatePublisher,
   deletePublisher,

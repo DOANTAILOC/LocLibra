@@ -2,6 +2,13 @@ const mongoose = require("mongoose");
 
 const authorSchema = new mongoose.Schema(
   {
+    MATG: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      uppercase: true,
+    },
     Hoten: {
       type: String,
       required: true,
@@ -18,7 +25,7 @@ const authorSchema = new mongoose.Schema(
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
-  }
+  },
 );
 
 // Indexes

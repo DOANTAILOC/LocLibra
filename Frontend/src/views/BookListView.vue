@@ -124,13 +124,13 @@ const sortOptions = [
 ];
 
 const genreOptions = computed(() =>
-  uniqueValues(books.value.map((item) => item.THELOAI)),
+  uniqueValues(books.value.flatMap((item) => toArrayField(item.THELOAI))),
 );
 const publisherOptions = computed(() =>
   uniqueValues(books.value.map((item) => item.MANXB)),
 );
 const authorOptions = computed(() =>
-  uniqueValues(books.value.map((item) => item.TACGIA)),
+  uniqueValues(books.value.flatMap((item) => toArrayField(item.TACGIA))),
 );
 
 const filterSections = computed(() => [
@@ -165,15 +165,18 @@ const filterSections = computed(() => [
 
 const filteredBooks = computed(() => {
   let data = books.value.filter((book) => {
+    const bookGenres = toArrayField(book.THELOAI);
+    const bookAuthors = toArrayField(book.TACGIA);
     const matchesSearch =
       !searchText.value ||
-      String(book.TENSACH || "")
+      [book.TENSACH || "", ...bookAuthors]
+        .join(" ")
         .toLowerCase()
         .includes(searchText.value.toLowerCase());
 
     const matchesGenre =
       !selectedGenres.value.length ||
-      selectedGenres.value.includes(book.THELOAI);
+      selectedGenres.value.some((item) => bookGenres.includes(item));
 
     const matchesPublisher =
       !selectedPublishers.value.length ||
@@ -181,7 +184,7 @@ const filteredBooks = computed(() => {
 
     const matchesAuthor =
       !selectedAuthors.value.length ||
-      selectedAuthors.value.includes(book.TACGIA);
+      selectedAuthors.value.some((item) => bookAuthors.includes(item));
 
     const currentStatus = book.SOQUYEN > 0 ? "available" : "out";
     const matchesStatus =
@@ -230,6 +233,21 @@ function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) =>
     String(a).localeCompare(String(b), "vi"),
   );
+}
+
+function toArrayField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 function updateFilter(key, value) {

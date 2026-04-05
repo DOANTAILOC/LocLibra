@@ -10,6 +10,8 @@
     empty-text="Không tìm thấy thể loại phù hợp."
     detail-title="Chi tiết thể loại"
     detail-empty-text="Chọn một thể loại ở bảng để xem chi tiết."
+    auto-code-field-key="MATL"
+    auto-code-endpoint="/admin/genres/next-code"
     :columns="columns"
     :form-fields="formFields"
     :detail-fields="detailFields"
@@ -20,11 +22,13 @@
 import EntityManagerView from "../components/admin/EntityManagerView.vue";
 
 const columns = [
+  { key: "MATL", label: "Mã thể loại" },
   { key: "name", label: "Tên thể loại" },
   { key: "description", label: "Mô tả" },
 ];
 
 const formFields = [
+  { key: "MATL", label: "Mã thể loại", placeholder: "Tự động sinh" },
   {
     key: "name",
     label: "Tên thể loại",
@@ -40,6 +44,7 @@ const formFields = [
 ];
 
 const detailFields = [
+  { key: "MATL", label: "Mã thể loại" },
   { key: "name", label: "Tên thể loại" },
   { key: "description", label: "Mô tả" },
 ];

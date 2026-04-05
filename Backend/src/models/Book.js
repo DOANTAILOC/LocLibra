@@ -36,20 +36,31 @@ const BookSchema = new mongoose.Schema(
       trim: true,
     },
     TACGIA: {
-      type: String,
-      ref: "Author",
-      required: true,
-      trim: true,
+      type: [
+        {
+          type: String,
+          trim: true,
+        },
+      ],
+      default: [],
+      validate: {
+        validator: (value) => Array.isArray(value) && value.length > 0,
+        message: "Sách phải có ít nhất một tác giả",
+      },
     },
     THELOAI: {
-      type: String,
-      ref: "Genre",
-      trim: true,
+      type: [
+        {
+          type: String,
+          trim: true,
+        },
+      ],
+      default: [],
     },
     MOTA_NGAN: {
       type: String,
       trim: true,
-      maxlength: 1500,
+      maxlength: 5000,
       default: "",
     },
     ANHBIA_URL: {
@@ -79,7 +90,7 @@ const BookSchema = new mongoose.Schema(
 );
 
 // Indexes
-BookSchema.index({ TENSACH: "text", NGUONGOC_TACGIA: "text" });
+BookSchema.index({ TENSACH: "text", TACGIA: "text" });
 BookSchema.index({ MANXB: 1 });
 BookSchema.index({ SOQUYEN: 1 });
 

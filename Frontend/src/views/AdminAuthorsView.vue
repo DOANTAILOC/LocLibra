@@ -10,6 +10,8 @@
     empty-text="Không tìm thấy tác giả phù hợp."
     detail-title="Chi tiết tác giả"
     detail-empty-text="Chọn một tác giả ở bảng để xem chi tiết."
+    auto-code-field-key="MATG"
+    auto-code-endpoint="/admin/authors/next-code"
     :columns="columns"
     :form-fields="formFields"
     :detail-fields="detailFields"
@@ -20,12 +22,14 @@
 import EntityManagerView from "../components/admin/EntityManagerView.vue";
 
 const columns = [
+  { key: "MATG", label: "Mã tác giả" },
   { key: "Hoten", label: "Tác giả" },
   { key: "QuocTich", label: "Quốc tịch" },
   { key: "TieuSu", label: "Tiểu sử" },
 ];
 
 const formFields = [
+  { key: "MATG", label: "Mã tác giả", placeholder: "Tự động sinh" },
   {
     key: "Hoten",
     label: "Họ tên",
@@ -42,6 +46,7 @@ const formFields = [
 ];
 
 const detailFields = [
+  { key: "MATG", label: "Mã tác giả" },
   { key: "Hoten", label: "Họ tên" },
   { key: "QuocTich", label: "Quốc tịch" },
   { key: "TieuSu", label: "Tiểu sử" },

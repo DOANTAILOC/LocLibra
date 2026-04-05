@@ -6,11 +6,16 @@
     <div
       class="relative flex items-center justify-center bg-[var(--surface-container-high)] p-4 md:p-5"
     >
-      <img
-        :src="cover"
-        :alt="book.TENSACH"
-        class="h-72 w-auto object-contain md:h-80"
-      />
+      <div
+        class="relative w-full max-w-[260px] overflow-hidden rounded-lg border border-[rgb(184_188_163/25%)] bg-white"
+        style="aspect-ratio: 2 / 3"
+      >
+        <img
+          :src="cover"
+          :alt="book.TENSACH"
+          class="h-full w-full object-cover"
+        />
+      </div>
       <span
         class="absolute right-4 top-4 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
         :class="
@@ -46,11 +51,11 @@
       </h3>
 
       <p class="text-sm text-[var(--on-surface-variant)]">
-        {{ book.TACGIA || "Chưa rõ tác giả" }}
+        {{ authorText }}
       </p>
 
       <p class="text-sm text-[var(--on-surface-variant)]">
-        Thể loại: {{ book.THELOAI || "Chưa phân loại" }}
+        Thể loại: {{ genreText }}
       </p>
 
       <p class="text-sm text-[var(--on-surface-variant)]">
@@ -98,6 +103,20 @@ const emit = defineEmits(["borrow", "detail"]);
 const isAvailable = computed(() => Number(props.book.SOQUYEN || 0) > 0);
 const averageValue = computed(() => Number(props.averageScore || 0));
 const ratingText = computed(() => Number(props.averageScore || 0).toFixed(1));
+const authorText = computed(() => {
+  const value = props.book.TACGIA;
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ") || "Chưa rõ tác giả";
+  }
+  return value || "Chưa rõ tác giả";
+});
+const genreText = computed(() => {
+  const value = props.book.THELOAI;
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ") || "Chưa phân loại";
+  }
+  return value || "Chưa phân loại";
+});
 
 const isBorrowedStatus = computed(() => {
   const status = String(props.book.TRANGTHAI || "").toLowerCase();
@@ -116,7 +135,7 @@ const cover = computed(() => {
   const seed = encodeURIComponent(
     props.book.MASACH || props.book.TENSACH || "book",
   );
-  return `https://picsum.photos/seed/${seed}/600/420`;
+  return `https://picsum.photos/seed/${seed}/420/630`;
 });
 
 function onActionClick() {

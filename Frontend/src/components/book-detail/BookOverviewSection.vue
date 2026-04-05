@@ -57,7 +57,7 @@
               Tác giả
             </p>
             <p class="text-sm font-bold text-[var(--on-surface)]">
-              {{ book.TACGIA || "Chưa rõ" }}
+              {{ authorText }}
             </p>
           </div>
           <div>
@@ -95,7 +95,9 @@
 </template>
 
 <script setup>
-defineProps({
+import { computed } from "vue";
+
+const props = defineProps({
   book: {
     type: Object,
     required: true,
@@ -116,6 +118,14 @@ defineProps({
     type: Object,
     required: true,
   },
+});
+
+const authorText = computed(() => {
+  const value = props.book?.TACGIA;
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join(", ") || "Chưa rõ";
+  }
+  return value || "Chưa rõ";
 });
 
 const emit = defineEmits(["borrow"]);
