@@ -76,6 +76,7 @@
                 <option value="BORROWING">ĐANG MƯỢN</option>
                 <option value="OVERDUE">QUÁ HẠN</option>
                 <option value="RETURNED">ĐÃ TRẢ</option>
+                <option value="LOST">MẤT SÁCH</option>
                 <option value="REJECTED">TỪ CHỐI</option>
                 <option value="CANCELLED">ĐÃ HỦY</option>
               </select>
@@ -396,6 +397,37 @@
                 <span class="material-symbols-outlined text-sm">block</span>
                 Từ chối phiếu
               </button>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[rgb(83_99_79/25%)] py-2.5 text-xs font-bold text-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="!canApproveExtension || isMutating"
+                @click="approveExtensionSelected"
+              >
+                <span class="material-symbols-outlined text-sm"
+                  >event_available</span
+                >
+                Duyệt gia hạn
+              </button>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[rgb(254_139_112/45%)] py-2.5 text-xs font-bold text-[var(--on-error-container)] disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="!canRejectExtension || isMutating"
+                @click="rejectExtensionSelected"
+              >
+                <span class="material-symbols-outlined text-sm"
+                  >event_busy</span
+                >
+                Từ chối gia hạn
+              </button>
+              <button
+                type="button"
+                class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[rgb(254_139_112/45%)] py-2.5 text-xs font-bold text-[var(--on-error-container)] disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="!canMarkLost || isMutating"
+                @click="markSelectedAsLost"
+              >
+                <span class="material-symbols-outlined text-sm">report</span>
+                Báo mất sách
+              </button>
             </div>
           </div>
         </AdminDetailAside>
@@ -433,6 +465,7 @@ const statusLabelMap = {
   BORROWING: "Đang mượn",
   OVERDUE: "Quá hạn",
   RETURNED: "Đã trả",
+  LOST: "Mất sách",
   CANCELLED: "Đã hủy",
 };
 
@@ -468,7 +501,10 @@ const nextAction = computed(() => {
   if (status === "PENDING") return "approve";
   if (status === "APPROVED") return "hand-over";
   if (["BORROWING", "OVERDUE"].includes(status)) return "return";
-  if (status === "RETURNED" && selectedLoan.value?.fineStatus === "UNPAID") {
+  if (
+    ["RETURNED", "LOST"].includes(status) &&
+    selectedLoan.value?.fineStatus === "UNPAID"
+  ) {
     return "pay-fine";
   }
   return null;
@@ -483,6 +519,15 @@ const nextActionLabel = computed(() => {
 });
 
 const canReject = computed(() => selectedLoan.value?.status === "PENDING");
+const canMarkLost = computed(() =>
+  ["BORROWING", "OVERDUE"].includes(selectedLoan.value?.status),
+);
+const canApproveExtension = computed(
+  () => selectedLoan.value?.extensionRequestStatus === "PENDING",
+);
+const canRejectExtension = computed(
+  () => selectedLoan.value?.extensionRequestStatus === "PENDING",
+);
 
 watch(filteredRows, (rows) => {
   if (!rows.length) {
@@ -523,17 +568,25 @@ function formatBorrowItem(item) {
     statusLabel: statusLabelMap[item.TRANGTHAI] || item.TRANGTHAI,
     fineAmount: item.TIENPHAT || 0,
     fineStatus: item.TRANGTHAI_PHAT || "PAID",
+    extensionCount: Number(item.SO_LAN_GIA_HAN || 0),
+    extensionRequestStatus: item.TRANGTHAI_GIA_HAN || "NONE",
     books: [
       {
         title: item.SACH?.TENSACH || item.MASACH || "Chưa có tên sách",
         note:
-          item.TRANGTHAI === "OVERDUE"
-            ? `Trễ ${item.SONGAYTRE || 0} ngày`
-            : `Mã sách: ${item.SACH?.MASACH || item.MASACH || "---"}`,
+          item.TRANGTHAI_GIA_HAN === "PENDING"
+            ? "Có yêu cầu gia hạn đang chờ duyệt"
+            : item.TRANGTHAI === "LOST"
+              ? `Đền bù: ${(item.TIENPHAT || 0).toLocaleString("vi-VN")} VND`
+              : item.TRANGTHAI === "OVERDUE"
+                ? `Trễ ${item.SONGAYTRE || 0} ngày`
+                : `Mã sách: ${item.SACH?.MASACH || item.MASACH || "---"}`,
         noteClass:
-          item.TRANGTHAI === "OVERDUE"
-            ? "text-[var(--error)] font-medium"
-            : "text-[var(--on-surface-variant)]",
+          item.TRANGTHAI_GIA_HAN === "PENDING"
+            ? "text-[var(--primary)] font-medium"
+            : item.TRANGTHAI === "OVERDUE" || item.TRANGTHAI === "LOST"
+              ? "text-[var(--error)] font-medium"
+              : "text-[var(--on-surface-variant)]",
       },
     ],
   };
@@ -554,7 +607,7 @@ async function fetchBorrows() {
   try {
     const query =
       selectedStatus.value !== "ALL" ? `?status=${selectedStatus.value}` : "";
-    const response = await api.get(`/borrow${query}`);
+    const response = await api.get(`/borrows${query}`);
     rawBorrows.value = (response.data?.items || []).map(formatBorrowItem);
     if (!selectedLoan.value && rawBorrows.value.length) {
       selectedLoan.value = rawBorrows.value[0];
@@ -579,7 +632,7 @@ async function updateBorrowStatus(loan, action, payload = {}) {
   successMessage.value = "";
 
   try {
-    const endpoint = `/borrow/${loan.id}/${action}`;
+    const endpoint = `/borrows/${loan.id}/${action}`;
     const response = await api.patch(endpoint, payload);
     successMessage.value =
       response.data?.message || "Cập nhật trạng thái thành công";
@@ -612,7 +665,7 @@ async function runPrimaryAction(loan) {
     return;
   }
 
-  if (status === "RETURNED" && loan?.fineStatus === "UNPAID") {
+  if (["RETURNED", "LOST"].includes(status) && loan?.fineStatus === "UNPAID") {
     await updateBorrowStatus(loan, "pay-fine");
   }
 }
@@ -624,6 +677,29 @@ async function rejectSelected() {
   });
 }
 
+async function approveExtensionSelected() {
+  if (!canApproveExtension.value || !selectedLoan.value) return;
+  await updateBorrowStatus(selectedLoan.value, "approve-extension");
+}
+
+async function rejectExtensionSelected() {
+  if (!canRejectExtension.value || !selectedLoan.value) return;
+  await updateBorrowStatus(selectedLoan.value, "reject-extension", {
+    reason: "Yêu cầu gia hạn không được chấp nhận",
+  });
+}
+
+async function markSelectedAsLost() {
+  if (!canMarkLost.value || !selectedLoan.value) return;
+
+  const accepted = window.confirm(
+    "Xác nhận báo mất sách? Hệ thống sẽ ghi nhận bồi thường bằng đúng đơn giá sách.",
+  );
+  if (!accepted) return;
+
+  await updateBorrowStatus(selectedLoan.value, "lost");
+}
+
 onMounted(async () => {
   await fetchBorrows();
 });
@@ -633,6 +709,9 @@ watch(selectedStatus, fetchBorrows);
 function statusChipClass(status) {
   if (status === "OVERDUE") return "status-chip-overdue";
   if (status === "RETURNED") return "status-chip-returned";
+  if (status === "LOST") {
+    return "bg-[rgb(254_139_112/30%)] text-[var(--on-error-container)]";
+  }
   if (status === "PENDING") return "status-chip-draft";
   if (status === "REJECTED" || status === "CANCELLED") {
     return "bg-[rgb(254_139_112/30%)] text-[var(--on-error-container)]";

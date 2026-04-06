@@ -29,6 +29,7 @@ const BorrowSchema = new mongoose.Schema(
         "BORROWING",
         "OVERDUE",
         "RETURNED",
+        "LOST",
         "CANCELLED",
       ],
       default: "PENDING",
@@ -59,6 +60,33 @@ const BorrowSchema = new mongoose.Schema(
     },
     NGAYTRA: {
       type: Date,
+      default: null,
+    },
+    SO_LAN_GIA_HAN: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    NGAYGIAHAN_CUOI: {
+      type: Date,
+      default: null,
+    },
+    TRANGTHAI_GIA_HAN: {
+      type: String,
+      enum: ["NONE", "PENDING", "APPROVED", "REJECTED"],
+      default: "NONE",
+    },
+    NGAYYEUCAU_GIA_HAN: {
+      type: Date,
+      default: null,
+    },
+    NGAYDUYET_GIA_HAN: {
+      type: Date,
+      default: null,
+    },
+    LYDO_TUCHOI_GIA_HAN: {
+      type: String,
+      trim: true,
       default: null,
     },
     LYDOTUCHOI: {

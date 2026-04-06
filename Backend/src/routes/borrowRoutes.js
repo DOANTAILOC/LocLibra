@@ -5,6 +5,10 @@ const {
   rejectBorrowRequest,
   handOverBook,
   returnBook,
+  requestBorrowExtension,
+  approveBorrowExtension,
+  rejectBorrowExtension,
+  reportLostBook,
   payFine,
   getBorrows,
   getMyBorrowRequests,
@@ -27,6 +31,12 @@ router.post(
   createBorrowRequest,
 );
 router.get("/my", authenticate, authorizeRoles("reader"), getMyBorrowRequests);
+router.patch(
+  "/:id/extend",
+  authenticate,
+  authorizeRoles("reader"),
+  requestBorrowExtension,
+);
 
 router.get("/", authenticate, authorizeRoles("staff"), getBorrows);
 
@@ -69,6 +79,24 @@ router.patch(
   handOverBook,
 );
 router.patch("/:id/return", authenticate, authorizeRoles("staff"), returnBook);
+router.patch(
+  "/:id/approve-extension",
+  authenticate,
+  authorizeRoles("staff"),
+  approveBorrowExtension,
+);
+router.patch(
+  "/:id/reject-extension",
+  authenticate,
+  authorizeRoles("staff"),
+  rejectBorrowExtension,
+);
+router.patch(
+  "/:id/lost",
+  authenticate,
+  authorizeRoles("staff"),
+  reportLostBook,
+);
 router.patch("/:id/pay-fine", authenticate, authorizeRoles("staff"), payFine);
 
 module.exports = router;

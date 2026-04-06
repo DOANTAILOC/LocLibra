@@ -659,11 +659,10 @@
             <div class="space-y-1">
               <label class="form-label">Mã nhà xuất bản</label>
               <input
-                v-model.trim="metaForm.MANXB"
-                required
                 class="form-input"
                 type="text"
-                placeholder="VD: NXB001"
+                :value="metaNextPublisherCode || 'Đang sinh mã...'"
+                readonly
               />
             </div>
             <div class="space-y-1">
@@ -742,6 +741,7 @@ const showMetaCreateModal = ref(false);
 const isCreatingMeta = ref(false);
 const metaCreateType = ref("author");
 const metaForm = ref(getEmptyMetaForm("author"));
+const metaNextPublisherCode = ref("");
 
 function getEmptyMetaForm(type) {
   if (type === "author") {
@@ -1024,13 +1024,28 @@ async function fetchNextGeneratedCode() {
 function openMetaCreateModal(type) {
   metaCreateType.value = type;
   metaForm.value = getEmptyMetaForm(type);
+  metaNextPublisherCode.value = "";
   showCreateModal.value = false;
   showMetaCreateModal.value = true;
+
+  if (type === "publisher") {
+    fetchNextPublisherCode();
+  }
 }
 
 function closeMetaCreateModal() {
   showMetaCreateModal.value = false;
   showCreateModal.value = true;
+}
+
+async function fetchNextPublisherCode() {
+  try {
+    const response = await api.get("/admin/publishers/next-code");
+    metaNextPublisherCode.value = response.data?.nextCode || "";
+  } catch (error) {
+    metaNextPublisherCode.value = "";
+    errorMessage.value = normalizeError(error);
+  }
 }
 
 async function submitMetaCreate() {
@@ -1063,13 +1078,15 @@ async function submitMetaCreate() {
       }
     } else {
       const payload = {
-        MANXB: String(metaForm.value.MANXB || "").trim(),
         TENNXB: String(metaForm.value.TENNXB || "").trim(),
         DIACHI: String(metaForm.value.DIACHI || "").trim(),
       };
-      await api.post("/admin/publishers", payload);
+      const response = await api.post("/admin/publishers", payload);
       await fetchMetadata();
-      newBook.value.MANXB = payload.MANXB;
+      const createdCode = String(response.data?.MANXB || "").trim();
+      if (createdCode) {
+        newBook.value.MANXB = createdCode;
+      }
     }
 
     showMetaCreateModal.value = false;

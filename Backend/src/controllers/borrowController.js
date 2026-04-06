@@ -6,6 +6,8 @@ const Staff = require("../models/Staff");
 const MAX_ACTIVE_BORROWS = 5;
 const DEFAULT_BORROW_DAYS = 14;
 const DEFAULT_PICKUP_DEADLINE_DAYS = 2;
+const DEFAULT_EXTENSION_DAYS = 7;
+const MAX_EXTENSION_COUNT = 1;
 const DAILY_FINE_RATE = 2000;
 const BORROW_STATUSES = [
   "PENDING",
@@ -14,8 +16,10 @@ const BORROW_STATUSES = [
   "BORROWING",
   "OVERDUE",
   "RETURNED",
+  "LOST",
   "CANCELLED",
 ];
+const EXTENSION_REQUEST_STATUSES = ["NONE", "PENDING", "APPROVED", "REJECTED"];
 
 const addDays = (date, days) => {
   const result = new Date(date);
@@ -340,6 +344,261 @@ const returnBook = async (req, res) => {
   }
 };
 
+const requestBorrowExtension = async (req, res) => {
+  try {
+    const reader = await getReaderFromAccount(req);
+    if (!reader) {
+      return res.status(403).json({ message: "Tài khoản không phải độc giả" });
+    }
+
+    const borrow = await Borrow.findById(req.params.id);
+    if (!borrow) {
+      return res.status(404).json({ message: "Không tìm thấy phiếu mượn" });
+    }
+
+    if (borrow.MADOCGIA !== reader.MADOCGIA) {
+      return res
+        .status(403)
+        .json({ message: "Bạn không có quyền gia hạn phiếu này" });
+    }
+
+    if (borrow.TRANGTHAI !== "BORROWING") {
+      return res.status(400).json({
+        message: "Chỉ có thể xin gia hạn khi phiếu đang ở trạng thái đang mượn",
+      });
+    }
+
+    if (!borrow.NGAYHENTRA) {
+      return res.status(400).json({ message: "Phiếu mượn chưa có hạn trả" });
+    }
+
+    const now = new Date();
+    if (now >= borrow.NGAYHENTRA) {
+      borrow.TRANGTHAI = "OVERDUE";
+      await borrow.save();
+      return res.status(400).json({
+        message: "Phiếu đã đến hạn hoặc quá hạn, không thể xin gia hạn",
+      });
+    }
+
+    if ((borrow.SO_LAN_GIA_HAN || 0) >= MAX_EXTENSION_COUNT) {
+      return res.status(400).json({
+        message: `Mỗi phiếu chỉ được gia hạn tối đa ${MAX_EXTENSION_COUNT} lần`,
+      });
+    }
+
+    if (borrow.TRANGTHAI_GIA_HAN === "PENDING") {
+      return res.status(400).json({
+        message: "Bạn đã có yêu cầu gia hạn đang chờ nhân viên duyệt",
+      });
+    }
+
+    borrow.TRANGTHAI_GIA_HAN = "PENDING";
+    borrow.NGAYYEUCAU_GIA_HAN = now;
+    borrow.NGAYDUYET_GIA_HAN = null;
+    borrow.LYDO_TUCHOI_GIA_HAN = null;
+    await borrow.save();
+
+    return res.status(200).json({
+      message: "Đã gửi yêu cầu gia hạn, vui lòng chờ nhân viên duyệt",
+      borrow,
+      extension: {
+        requestStatus: borrow.TRANGTHAI_GIA_HAN,
+        extensionCount: borrow.SO_LAN_GIA_HAN,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi xin gia hạn phiếu mượn",
+      error: error.message,
+    });
+  }
+};
+
+const approveBorrowExtension = async (req, res) => {
+  try {
+    const staff = await getStaffFromAccount(req);
+    if (!staff) {
+      return res
+        .status(403)
+        .json({ message: "Tài khoản không phải nhân viên" });
+    }
+
+    const borrow = await Borrow.findById(req.params.id);
+    if (!borrow) {
+      return res.status(404).json({ message: "Không tìm thấy phiếu mượn" });
+    }
+
+    if (borrow.TRANGTHAI_GIA_HAN !== "PENDING") {
+      return res.status(400).json({
+        message: "Phiếu này không có yêu cầu gia hạn đang chờ duyệt",
+      });
+    }
+
+    if (borrow.TRANGTHAI !== "BORROWING") {
+      return res.status(400).json({
+        message: "Chỉ duyệt gia hạn cho phiếu đang mượn",
+      });
+    }
+
+    if (!borrow.NGAYHENTRA) {
+      return res.status(400).json({ message: "Phiếu mượn chưa có hạn trả" });
+    }
+
+    const now = new Date();
+    if (now >= borrow.NGAYHENTRA) {
+      borrow.TRANGTHAI = "OVERDUE";
+      borrow.TRANGTHAI_GIA_HAN = "REJECTED";
+      borrow.NGAYDUYET_GIA_HAN = now;
+      borrow.LYDO_TUCHOI_GIA_HAN = "Phiếu đã đến hạn hoặc quá hạn";
+      borrow.MSNV = staff.MSNV;
+      await borrow.save();
+
+      return res.status(400).json({
+        message: "Phiếu đã đến hạn hoặc quá hạn, không thể duyệt gia hạn",
+      });
+    }
+
+    if ((borrow.SO_LAN_GIA_HAN || 0) >= MAX_EXTENSION_COUNT) {
+      borrow.TRANGTHAI_GIA_HAN = "REJECTED";
+      borrow.NGAYDUYET_GIA_HAN = now;
+      borrow.LYDO_TUCHOI_GIA_HAN = `Đã đạt giới hạn gia hạn ${MAX_EXTENSION_COUNT} lần`;
+      borrow.MSNV = staff.MSNV;
+      await borrow.save();
+
+      return res.status(400).json({
+        message: `Mỗi phiếu chỉ được gia hạn tối đa ${MAX_EXTENSION_COUNT} lần`,
+      });
+    }
+
+    borrow.NGAYHENTRA = addDays(borrow.NGAYHENTRA, DEFAULT_EXTENSION_DAYS);
+    borrow.SO_LAN_GIA_HAN = (borrow.SO_LAN_GIA_HAN || 0) + 1;
+    borrow.NGAYGIAHAN_CUOI = now;
+    borrow.TRANGTHAI_GIA_HAN = "APPROVED";
+    borrow.NGAYDUYET_GIA_HAN = now;
+    borrow.LYDO_TUCHOI_GIA_HAN = null;
+    borrow.MSNV = staff.MSNV;
+    await borrow.save();
+
+    return res.status(200).json({
+      message: `Đã duyệt gia hạn thêm ${DEFAULT_EXTENSION_DAYS} ngày`,
+      borrow,
+      extension: {
+        extensionDays: DEFAULT_EXTENSION_DAYS,
+        extensionCount: borrow.SO_LAN_GIA_HAN,
+        requestStatus: borrow.TRANGTHAI_GIA_HAN,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi duyệt gia hạn phiếu mượn",
+      error: error.message,
+    });
+  }
+};
+
+const rejectBorrowExtension = async (req, res) => {
+  try {
+    const staff = await getStaffFromAccount(req);
+    if (!staff) {
+      return res
+        .status(403)
+        .json({ message: "Tài khoản không phải nhân viên" });
+    }
+
+    const { reason } = req.body;
+    const borrow = await Borrow.findById(req.params.id);
+    if (!borrow) {
+      return res.status(404).json({ message: "Không tìm thấy phiếu mượn" });
+    }
+
+    if (borrow.TRANGTHAI_GIA_HAN !== "PENDING") {
+      return res.status(400).json({
+        message: "Phiếu này không có yêu cầu gia hạn đang chờ duyệt",
+      });
+    }
+
+    borrow.TRANGTHAI_GIA_HAN = "REJECTED";
+    borrow.NGAYDUYET_GIA_HAN = new Date();
+    borrow.LYDO_TUCHOI_GIA_HAN =
+      reason || "Yêu cầu gia hạn không được chấp nhận";
+    borrow.MSNV = staff.MSNV;
+    await borrow.save();
+
+    return res.status(200).json({
+      message: "Đã từ chối yêu cầu gia hạn",
+      borrow,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi từ chối gia hạn phiếu mượn",
+      error: error.message,
+    });
+  }
+};
+
+const reportLostBook = async (req, res) => {
+  try {
+    const staff = await getStaffFromAccount(req);
+    if (!staff) {
+      return res
+        .status(403)
+        .json({ message: "Tài khoản không phải nhân viên" });
+    }
+
+    const borrow = await Borrow.findById(req.params.id);
+    if (!borrow) {
+      return res.status(404).json({ message: "Không tìm thấy phiếu mượn" });
+    }
+
+    if (!["BORROWING", "OVERDUE"].includes(borrow.TRANGTHAI)) {
+      return res.status(400).json({
+        message: "Chỉ có thể báo mất với phiếu đang mượn hoặc quá hạn",
+      });
+    }
+
+    const book = await Book.findOne({
+      MASACH: borrow.MASACH,
+      TRANGTHAI: { $ne: "DELETED" },
+    }).select("DONGIA");
+
+    if (!book) {
+      return res.status(404).json({
+        message: "Không tìm thấy sách để tính tiền bồi thường",
+      });
+    }
+
+    const compensationAmount = Number(book.DONGIA || 0);
+
+    borrow.TRANGTHAI = "LOST";
+    borrow.MSNV = staff.MSNV;
+    borrow.NGAYTRA = new Date();
+    borrow.TIENPHAT = compensationAmount;
+    borrow.TRANGTHAI_PHAT = compensationAmount > 0 ? "UNPAID" : "PAID";
+    await borrow.save();
+
+    if (compensationAmount > 0) {
+      await Reader.findOneAndUpdate(
+        { MADOCGIA: borrow.MADOCGIA },
+        { $inc: { NO_PHAT: compensationAmount } },
+      );
+    }
+
+    return res.status(200).json({
+      message: "Đã ghi nhận mất sách và áp dụng tiền bồi thường",
+      borrow,
+      compensation: {
+        amount: compensationAmount,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi xử lý mất sách",
+      error: error.message,
+    });
+  }
+};
+
 const payFine = async (req, res) => {
   try {
     const staff = await getStaffFromAccount(req);
@@ -398,8 +657,38 @@ const getMyBorrowRequests = async (req, res) => {
 
     const borrows = await Borrow.find({ MADOCGIA: reader.MADOCGIA }).sort({
       NGAYYEUCAU: -1,
+      created_at: -1,
     });
-    return res.status(200).json(borrows);
+
+    const bookIds = [...new Set(borrows.map((borrow) => borrow.MASACH))];
+    const books = await Book.find({
+      MASACH: { $in: bookIds },
+      TRANGTHAI: { $ne: "DELETED" },
+    })
+      .select("MASACH TENSACH TACGIA ANHBIA_URL")
+      .lean();
+
+    const bookMap = new Map(books.map((book) => [book.MASACH, book]));
+
+    const enrichedBorrows = borrows.map((borrow) => {
+      const book = bookMap.get(borrow.MASACH);
+
+      return {
+        ...borrow.toObject(),
+        SACH: {
+          MASACH: borrow.MASACH,
+          TENSACH: book?.TENSACH || null,
+          TACGIA: Array.isArray(book?.TACGIA) ? book.TACGIA : [],
+          ANHBIA_URL: book?.ANHBIA_URL || "",
+        },
+      };
+    });
+
+    return res.status(200).json({
+      items: enrichedBorrows,
+      total: enrichedBorrows.length,
+      availableStatuses: BORROW_STATUSES,
+    });
   } catch (error) {
     return res
       .status(500)
@@ -572,6 +861,10 @@ module.exports = {
   rejectBorrowRequest,
   handOverBook,
   returnBook,
+  requestBorrowExtension,
+  approveBorrowExtension,
+  rejectBorrowExtension,
+  reportLostBook,
   payFine,
   getBorrows,
   getMyBorrowRequests,
