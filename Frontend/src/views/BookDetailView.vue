@@ -36,6 +36,9 @@
         :book-cover="bookCover"
         :borrowing="borrowing"
         :is-available="isAvailable"
+        :borrow-action-label="borrowActionLabel"
+        :borrow-status-label="borrowStatusLabel"
+        :borrow-disabled="borrowDisabled"
         :vote-summary="voteSummary"
         @borrow="handleBorrow"
       >
@@ -120,6 +123,7 @@ const voting = ref(false);
 const errorMessage = ref("");
 const book = ref(null);
 const relatedBooks = ref([]);
+const myBorrowStatus = ref("");
 const selectedScore = ref(0);
 const voteMessage = ref("");
 
@@ -130,10 +134,44 @@ const voteSummary = reactive({
 });
 
 const isAvailable = computed(() => Number(book.value?.SOQUYEN || 0) > 0);
+const normalizedBorrowStatus = computed(() =>
+  String(myBorrowStatus.value || "")
+    .trim()
+    .toUpperCase(),
+);
+const borrowStatusLabel = computed(() => {
+  const map = {
+    PENDING: "Đang đăng ký",
+    APPROVED: "Đã duyệt - chờ nhận",
+    BORROWING: "Đang mượn",
+    OVERDUE: "Đang quá hạn",
+  };
+
+  return map[normalizedBorrowStatus.value] || "";
+});
+const borrowDisabled = computed(() => {
+  if (borrowing.value) return true;
+  if (!authStore.isReader) return true;
+  if (!isAvailable.value) return true;
+  return ["PENDING", "APPROVED", "BORROWING", "OVERDUE"].includes(
+    normalizedBorrowStatus.value,
+  );
+});
+const borrowActionLabel = computed(() => {
+  if (borrowing.value) return "Đang gửi yêu cầu...";
+  if (!authStore.isLoggedIn) return "Đăng nhập để mượn";
+  if (!authStore.isReader) return "Chỉ độc giả được mượn";
+  if (normalizedBorrowStatus.value === "PENDING") return "Đang đăng ký";
+  if (normalizedBorrowStatus.value === "APPROVED") return "Đã duyệt - chờ nhận";
+  if (normalizedBorrowStatus.value === "BORROWING") return "Đang mượn";
+  if (normalizedBorrowStatus.value === "OVERDUE") return "Đang quá hạn";
+  if (!isAvailable.value) return "Hết sách";
+  return "Mượn sách";
+});
 const detailItems = computed(() => {
   if (!book.value) return [];
 
-  const genres = toArrayField(book.value.THELOAI);
+  const genres = toArrayField(book.value.THELOAI_TEN || book.value.THELOAI);
 
   return [
     { label: "Mã sách", value: book.value.MASACH || "Chưa rõ" },
@@ -141,7 +179,10 @@ const detailItems = computed(() => {
       label: "Thể loại",
       value: genres.length ? genres.join(", ") : "Chưa phân loại",
     },
-    { label: "Nhà xuất bản", value: book.value.MANXB || "Chưa rõ" },
+    {
+      label: "Nhà xuất bản",
+      value: book.value.MANXB_TEN || book.value.MANXB || "Chưa rõ",
+    },
     { label: "Năm xuất bản", value: book.value.NAMXUATBAN || "Chưa rõ" },
     { label: "Đơn giá", value: formatCurrency(book.value.DONGIA) },
     { label: "Số lượng", value: `${book.value.SOQUYEN || 0} cuốn` },
@@ -194,7 +235,7 @@ function toArrayField(value) {
 }
 
 function authorTextByBook(item) {
-  const authors = toArrayField(item?.TACGIA);
+  const authors = toArrayField(item?.TACGIA_TEN || item?.TACGIA);
   return authors.length ? authors.join(", ") : "Chưa rõ";
 }
 
@@ -227,13 +268,54 @@ function applyVoteSummary(data) {
   selectedScore.value = myVoteScore.value || selectedScore.value;
 }
 
+function parseBorrowResponse(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+async function fetchMyBorrowStatusForCurrentBook() {
+  if (!authStore.isLoggedIn || !authStore.isReader || !book.value?.MASACH) {
+    myBorrowStatus.value = "";
+    return;
+  }
+
+  try {
+    const { data } = await api.get("/borrows/my");
+    const items = parseBorrowResponse(data);
+    const active = items.find((item) => {
+      const status = String(item?.TRANGTHAI || "").toUpperCase();
+      const masach = item?.SACH?.MASACH || item?.MASACH;
+      return (
+        masach === book.value.MASACH &&
+        ["PENDING", "APPROVED", "BORROWING", "OVERDUE"].includes(status)
+      );
+    });
+
+    myBorrowStatus.value = active?.TRANGTHAI || "";
+  } catch {
+    myBorrowStatus.value = "";
+  }
+}
+
 async function handleBorrow() {
-  if (!book.value || !isAvailable.value) return;
+  if (!authStore.isLoggedIn) {
+    router.push("/login");
+    return;
+  }
+
+  if (!authStore.isReader) {
+    window.alert("Chỉ tài khoản độc giả mới có thể mượn sách.");
+    return;
+  }
+
+  if (!book.value || !isAvailable.value || borrowDisabled.value) return;
 
   borrowing.value = true;
   try {
     await api.post("/borrows/request", { MASACH: book.value.MASACH });
     window.alert("Đã gửi yêu cầu mượn sách thành công.");
+    await fetchMyBorrowStatusForCurrentBook();
   } catch (error) {
     window.alert(
       error?.response?.data?.message || "Không thể gửi yêu cầu mượn lúc này.",
@@ -340,6 +422,8 @@ async function fetchBookDetail() {
     relatedBooks.value = (Array.isArray(relatedRes.data) ? relatedRes.data : [])
       .filter((item) => item._id !== data._id)
       .slice(0, 5);
+
+    await fetchMyBorrowStatusForCurrentBook();
   } catch (error) {
     errorMessage.value =
       error?.response?.data?.message || "Không thể tải trang chi tiết sách.";

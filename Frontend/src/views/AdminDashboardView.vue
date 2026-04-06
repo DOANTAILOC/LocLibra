@@ -13,101 +13,38 @@
       @close="mobileMenuOpen = false"
     />
 
-    <main class="min-h-screen lg:ml-72">
-      <header
-        class="sticky top-0 z-30 flex items-center justify-between border-b border-[rgb(184_188_163/20%)] bg-[rgb(254_253_241/82%)] px-4 py-4 backdrop-blur-md md:px-8"
-      >
-        <div class="flex items-center gap-3 md:gap-5">
-          <button
-            type="button"
-            class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[rgb(184_188_163/55%)] bg-white/70 lg:hidden"
-            @click="mobileMenuOpen = true"
-          >
-            <span class="material-symbols-outlined">menu</span>
-          </button>
+    <main class="flex min-h-screen flex-1 flex-col lg:ml-72">
+      <AdminTopHeader @open-menu="mobileMenuOpen = true" />
 
-          <div class="relative hidden md:block">
-            <span
-              class="material-symbols-outlined pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[var(--on-surface-variant)]"
-            >
-              search
-            </span>
-            <input
-              type="text"
-              class="w-80 rounded-xl border border-transparent bg-[var(--surface-container-highest)] py-2.5 pr-4 pl-10 text-sm outline-none transition focus:border-[var(--outline-variant)]"
-              placeholder="Tìm sách, thành viên, mã mượn..."
-            />
-          </div>
-        </div>
-
-        <div class="flex items-center gap-3 md:gap-4">
-          <button
-            type="button"
-            class="relative rounded-full p-2.5 text-[var(--primary)] transition hover:bg-[var(--surface-container)]"
-          >
-            <span class="material-symbols-outlined">notifications</span>
-            <span
-              class="absolute top-2.5 right-2.5 h-2 w-2 rounded-full border border-[var(--surface)] bg-[var(--error)]"
-            ></span>
-          </button>
-
-          <div class="h-8 w-px bg-[rgb(184_188_163/45%)]"></div>
-
-          <div class="flex items-center gap-3">
-            <div class="hidden text-right sm:block">
-              <p class="text-sm font-semibold">Admin Curator</p>
-              <p
-                class="text-[10px] font-bold tracking-[0.16em] text-[var(--on-surface-variant)] uppercase"
-              >
-                Senior Librarian
-              </p>
-            </div>
-            <div
-              class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-[var(--on-primary)]"
-            >
-              AC
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <section class="px-4 pt-7 pb-12 md:px-8">
-        <div
-          class="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end"
+      <section class="flex-1 overflow-y-auto px-4 py-8 md:px-8">
+        <AdminPageHero
+          title="Tổng quan Thư viện"
+          description="Theo dõi số lượng sách, trạng thái mượn trả và hoạt động gần đây theo dữ liệu thật từ hệ thống."
         >
-          <div>
-            <h2
-              class="text-3xl leading-tight font-light text-slate-900 md:text-4xl"
-            >
-              Tổng quan Thư viện
-            </h2>
-            <p class="mt-2 max-w-xl text-[var(--on-surface-variant)]">
-              Chào mừng trở lại. Hệ thống đang theo dõi trạng thái mượn trả, xử
-              lý nhắc hạn và tổng hợp hành vi đọc theo thời gian thực.
-            </p>
-          </div>
-
-          <div class="flex flex-wrap gap-3">
+          <template #actions>
             <button
               type="button"
-              class="btn-secondary px-5 py-3 text-xs uppercase"
+              class="inline-flex items-center gap-2 rounded-lg bg-[var(--surface-container-highest)] px-5 py-2 text-sm font-semibold"
+              @click="router.push('/admin/books')"
             >
-              <span class="material-symbols-outlined mr-1 text-[18px]"
+              <span class="material-symbols-outlined text-[18px]"
                 >add_circle</span
               >
               Thêm sách mới
             </button>
             <button
               type="button"
-              class="btn-primary px-5 py-3 text-xs uppercase"
+              class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-[var(--on-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="loading"
+              @click="fetchDashboardSummary"
             >
-              <span class="material-symbols-outlined mr-1 text-[18px]"
-                >update</span
-              >
-              Gia hạn sách
+              <span class="material-symbols-outlined text-[18px]">refresh</span>
+              Làm mới
             </button>
-          </div>
-        </div>
+          </template>
+        </AdminPageHero>
+
+        <FeedbackAlert :message="errorMessage" type="error" />
 
         <div class="mb-10 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
           <article
@@ -135,134 +72,97 @@
           </article>
         </div>
 
-        <section
-          class="overflow-hidden rounded-xl bg-[var(--surface-container-lowest)] shadow-[0_12px_40px_rgb(54_58_39/6%)]"
+        <AdminTableShell
+          :loading="loading"
+          :empty="!loading && recentBorrowRows.length === 0"
+          :colspan="5"
+          loading-text="Đang tải dữ liệu hoạt động mượn..."
+          empty-text="Chưa có hoạt động mượn nào gần đây."
+          min-width-class="min-w-[760px]"
+          :total-text="activityTotalText"
         >
-          <div
-            class="flex items-center justify-between border-b border-[rgb(184_188_163/25%)] px-5 py-4 md:px-8"
-          >
-            <h3 class="text-xl">Hoạt động mượn sách gần đây</h3>
-            <div class="flex gap-2">
-              <button
-                type="button"
-                class="rounded-lg p-2 text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container)]"
+          <template #head>
+            <tr class="bg-[rgb(250_250_235/70%)]">
+              <th
+                class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
               >
-                <span class="material-symbols-outlined">filter_list</span>
-              </button>
-              <button
-                type="button"
-                class="rounded-lg p-2 text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container)]"
+                Tên sách
+              </th>
+              <th
+                class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
               >
-                <span class="material-symbols-outlined">download</span>
-              </button>
-            </div>
-          </div>
+                Người mượn
+              </th>
+              <th
+                class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
+              >
+                Ngày mượn
+              </th>
+              <th
+                class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
+              >
+                Trả dự kiến
+              </th>
+              <th
+                class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
+              >
+                Trạng thái
+              </th>
+            </tr>
+          </template>
 
-          <div class="overflow-x-auto">
-            <table class="min-w-[760px] w-full border-collapse text-left">
-              <thead>
-                <tr class="bg-[rgb(250_250_235/70%)]">
-                  <th
-                    class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
-                  >
-                    Tên sách
-                  </th>
-                  <th
-                    class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
-                  >
-                    Người mượn
-                  </th>
-                  <th
-                    class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
-                  >
-                    Ngày mượn
-                  </th>
-                  <th
-                    class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
-                  >
-                    Trả dự kiến
-                  </th>
-                  <th
-                    class="px-5 py-4 text-[10px] tracking-[0.14em] text-[var(--on-surface-variant)] uppercase md:px-8"
-                  >
-                    Trạng thái
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-[rgb(184_188_163/20%)]">
-                <tr
-                  v-for="row in recentBorrowRows"
-                  :key="row.memberId"
-                  class="transition hover:bg-[rgb(250_250_235/50%)]"
-                >
-                  <td class="px-5 py-5 md:px-8">
-                    <p class="font-semibold">{{ row.book }}</p>
-                    <p class="text-xs text-[var(--on-surface-variant)]">
-                      {{ row.author }}
-                    </p>
-                  </td>
-                  <td class="px-5 py-5 md:px-8">
-                    <p class="text-sm font-medium">{{ row.member }}</p>
-                    <p class="text-[10px] text-[var(--on-surface-variant)]">
-                      ID: {{ row.memberId }}
-                    </p>
-                  </td>
-                  <td
-                    class="px-5 py-5 text-sm text-[var(--on-surface-variant)] md:px-8"
-                  >
-                    {{ row.borrowedAt }}
-                  </td>
-                  <td
-                    class="px-5 py-5 text-sm md:px-8"
-                    :class="
-                      row.status === 'overdue'
-                        ? 'font-bold text-[var(--error)]'
-                        : 'text-[var(--on-surface-variant)]'
-                    "
-                  >
-                    {{ row.dueAt }}
-                  </td>
-                  <td class="px-5 py-5 md:px-8">
-                    <span
-                      class="status-chip"
-                      :class="borrowStatusClass(row.status)"
-                    >
-                      {{ row.statusLabel }}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <template #rows>
+            <tr
+              v-for="row in recentBorrowRows"
+              :key="row.id"
+              class="transition hover:bg-[rgb(250_250_235/50%)]"
+            >
+              <td class="px-5 py-5 md:px-8">
+                <p class="font-semibold">{{ row.book }}</p>
+                <p class="text-xs text-[var(--on-surface-variant)]">
+                  {{ row.author }}
+                </p>
+              </td>
+              <td class="px-5 py-5 md:px-8">
+                <p class="text-sm font-medium">{{ row.member }}</p>
+                <p class="text-[10px] text-[var(--on-surface-variant)]">
+                  ID: {{ row.memberId }}
+                </p>
+              </td>
+              <td
+                class="px-5 py-5 text-sm text-[var(--on-surface-variant)] md:px-8"
+              >
+                {{ formatDate(row.borrowedAt) }}
+              </td>
+              <td
+                class="px-5 py-5 text-sm md:px-8"
+                :class="
+                  row.status === 'overdue'
+                    ? 'font-bold text-[var(--error)]'
+                    : 'text-[var(--on-surface-variant)]'
+                "
+              >
+                {{ formatDate(row.dueAt) }}
+              </td>
+              <td class="px-5 py-5 md:px-8">
+                <StatusChip
+                  :label="row.statusLabel"
+                  :custom-class="borrowStatusClass(row.status)"
+                />
+              </td>
+            </tr>
+          </template>
 
-          <div
-            class="flex items-center justify-between border-t border-[rgb(184_188_163/20%)] bg-[rgb(250_250_235/40%)] px-5 py-4 md:px-8"
-          >
-            <p class="text-xs italic text-[var(--on-surface-variant)]">
-              Hiển thị 3 trên 1,245 bản ghi
-            </p>
-            <div class="flex gap-1">
-              <button
-                type="button"
-                class="h-8 w-8 rounded-lg text-xs hover:bg-[var(--surface-container)]"
-              >
-                1
-              </button>
-              <button
-                type="button"
-                class="h-8 w-8 rounded-lg bg-[var(--primary)] text-xs font-bold text-[var(--on-primary)]"
-              >
-                2
-              </button>
-              <button
-                type="button"
-                class="h-8 w-8 rounded-lg text-xs hover:bg-[var(--surface-container)]"
-              >
-                3
-              </button>
-            </div>
-          </div>
-        </section>
+          <template #footer>
+            <button
+              type="button"
+              class="rounded-lg bg-[var(--surface-container-highest)] px-3 py-1.5 text-xs font-semibold text-[var(--on-surface-variant)] transition hover:text-[var(--primary)]"
+              @click="fetchDashboardSummary"
+            >
+              Làm mới bảng
+            </button>
+          </template>
+        </AdminTableShell>
 
         <div class="mt-10 grid grid-cols-1 gap-6 xl:grid-cols-3">
           <article
@@ -334,24 +234,46 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import AdminSidebar from "../components/admin/AdminSidebar.vue";
+import AdminPageHero from "../components/admin/shared/AdminPageHero.vue";
+import AdminTableShell from "../components/admin/shared/AdminTableShell.vue";
+import AdminTopHeader from "../components/admin/shared/AdminTopHeader.vue";
+import FeedbackAlert from "../components/admin/shared/FeedbackAlert.vue";
+import StatusChip from "../components/admin/shared/StatusChip.vue";
+import api from "../api/axios";
 
+const router = useRouter();
 const mobileMenuOpen = ref(false);
+const loading = ref(false);
+const errorMessage = ref("");
 
-const stats = [
+const summary = reactive({
+  stats: {
+    totalBooks: 0,
+    totalTitles: 0,
+    activeBorrowCount: 0,
+    newMembersThisMonth: 0,
+    pendingRequests: 0,
+    totalBorrowRecords: 0,
+  },
+  recentBorrowRows: [],
+});
+
+const stats = computed(() => [
   {
-    label: "Tổng số sách",
-    value: "15,420",
+    label: "Tổng đầu sách",
+    value: formatNumber(summary.stats.totalTitles),
     icon: "menu_book",
-    badge: "+2.4%",
+    badge: `${formatNumber(summary.stats.totalBooks)} bản sách`,
     iconSurface:
       "bg-[var(--primary-container)] text-[var(--on-primary-container)]",
     badgeClass: "bg-[var(--primary-container)]/60 text-[var(--primary)]",
   },
   {
     label: "Sách đang mượn",
-    value: "1,245",
+    value: formatNumber(summary.stats.activeBorrowCount),
     icon: "outbound",
     badge: "Hiện tại",
     iconSurface:
@@ -360,7 +282,7 @@ const stats = [
   },
   {
     label: "Thành viên mới",
-    value: "86",
+    value: formatNumber(summary.stats.newMembersThisMonth),
     icon: "person_add",
     badge: "Tháng này",
     iconSurface:
@@ -369,50 +291,64 @@ const stats = [
   },
   {
     label: "Yêu cầu chờ",
-    value: "12",
+    value: formatNumber(summary.stats.pendingRequests),
     icon: "pending_actions",
     badge: "Cần xử lý",
     iconSurface: "bg-[rgb(254_139_112/25%)] text-[var(--error)]",
     badgeClass: "bg-[rgb(254_139_112/30%)] text-[var(--on-error-container)]",
   },
-];
+]);
 
-const recentBorrowRows = [
-  {
-    book: "Lược Sử Thời Gian",
-    author: "Stephen Hawking",
-    member: "Nguyễn Văn An",
-    memberId: "#MEM-4501",
-    borrowedAt: "12/10/2023",
-    dueAt: "26/10/2023",
-    status: "borrowing",
-    statusLabel: "Đang mượn",
-  },
-  {
-    book: "Tiếng Chim Hót Trong Bụi Mận Gai",
-    author: "Colleen McCullough",
-    member: "Trần Thị Bé",
-    memberId: "#MEM-2293",
-    borrowedAt: "01/10/2023",
-    dueAt: "15/10/2023",
-    status: "overdue",
-    statusLabel: "Quá hạn",
-  },
-  {
-    book: "Những Kẻ Xuất Chúng",
-    author: "Malcolm Gladwell",
-    member: "Lê Hoàng Nam",
-    memberId: "#MEM-9810",
-    borrowedAt: "05/10/2023",
-    dueAt: "19/10/2023",
-    status: "returned",
-    statusLabel: "Đã trả",
-  },
-];
+const recentBorrowRows = computed(() => summary.recentBorrowRows || []);
+const activityTotalText = computed(
+  () =>
+    `Hiển thị ${recentBorrowRows.value.length} trên ${formatNumber(summary.stats.totalBorrowRecords)} bản ghi`,
+);
+
+function formatNumber(value) {
+  return new Intl.NumberFormat("vi-VN").format(Number(value || 0));
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("vi-VN");
+}
+
+async function fetchDashboardSummary() {
+  loading.value = true;
+  errorMessage.value = "";
+
+  try {
+    const { data } = await api.get("/admin/dashboard-summary");
+    summary.stats = {
+      ...summary.stats,
+      ...(data?.stats || {}),
+    };
+    summary.recentBorrowRows = Array.isArray(data?.recentBorrowRows)
+      ? data.recentBorrowRows
+      : [];
+  } catch (error) {
+    errorMessage.value =
+      error?.response?.data?.message ||
+      "Không thể tải dữ liệu dashboard từ máy chủ.";
+  } finally {
+    loading.value = false;
+  }
+}
 
 function borrowStatusClass(status) {
+  if (status === "extension_pending") return "status-chip-draft";
+  if (status === "pending") return "status-chip-draft";
+  if (status === "approved") return "status-chip-draft";
   if (status === "overdue") return "status-chip-overdue";
+  if (status === "lost") return "status-chip-overdue";
   if (status === "returned") return "status-chip-returned";
+  if (status === "rejected") return "status-chip-overdue";
+  if (status === "cancelled") return "status-chip-draft";
   return "status-chip-active";
 }
+
+onMounted(fetchDashboardSummary);
 </script>

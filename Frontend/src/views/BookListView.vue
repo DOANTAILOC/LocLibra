@@ -30,6 +30,82 @@
           @update:model-value="updateFilter(filter.key, $event)"
         />
 
+        <article class="panel-surface space-y-4 p-5">
+          <h2
+            class="text-sm font-bold tracking-[0.08em] text-[var(--on-surface)] uppercase"
+          >
+            Tác giả
+          </h2>
+
+          <div class="relative">
+            <span
+              class="material-symbols-outlined pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[18px] text-[var(--on-surface-variant)]"
+            >
+              search
+            </span>
+            <input
+              v-model="authorSearchText"
+              type="text"
+              class="form-input !pl-10"
+              placeholder="Tìm tác giả..."
+            />
+          </div>
+
+          <div class="space-y-2">
+            <p
+              class="text-[11px] font-semibold tracking-[0.08em] text-[var(--on-surface-variant)] uppercase"
+            >
+              Tác giả nổi bật
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="author in featuredAuthors"
+                :key="author"
+                type="button"
+                class="rounded-full border px-3 py-1.5 text-xs font-semibold transition"
+                :class="
+                  selectedAuthors.includes(author)
+                    ? 'border-[var(--primary)] bg-[var(--primary-container)] text-[var(--on-primary-container)]'
+                    : 'border-[var(--outline-variant)] bg-[var(--surface-container-low)] text-[var(--on-surface-variant)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
+                "
+                @click="toggleAuthor(author)"
+              >
+                {{ author }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="authorSearchText.trim().length" class="space-y-2">
+            <p
+              class="text-[11px] font-semibold tracking-[0.08em] text-[var(--on-surface-variant)] uppercase"
+            >
+              Kết quả tìm tác giả
+            </p>
+
+            <div class="space-y-1">
+              <label
+                v-for="author in searchedAuthors"
+                :key="author"
+                class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-[var(--on-surface-variant)] hover:bg-[var(--surface-container-low)]"
+              >
+                <input
+                  :checked="selectedAuthors.includes(author)"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-[var(--outline-variant)] text-[var(--primary)] focus:ring-[var(--primary-container)]"
+                  @change="toggleAuthor(author)"
+                />
+                <span>{{ author }}</span>
+              </label>
+              <p
+                v-if="!searchedAuthors.length"
+                class="text-sm text-[var(--on-surface-variant)]"
+              >
+                Không tìm thấy tác giả phù hợp.
+              </p>
+            </div>
+          </div>
+        </article>
+
         <button
           type="button"
           class="btn-secondary w-full py-2.5 text-sm"
@@ -76,6 +152,7 @@
             v-for="book in filteredBooks"
             :key="book._id || book.MASACH"
             :book="book"
+            :borrow-status="borrowStatusForBook(book.MASACH)"
             :average-score="voteAverage(book.MASACH)"
             :total-votes="voteCount(book.MASACH)"
             @detail="goToBookDetail"
@@ -91,23 +168,28 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import api from "../api/axios";
+import { useAuthStore } from "../stores/auth";
 import SearchBar from "../components/books/SearchBar.vue";
 import FilterSection from "../components/books/FilterSection.vue";
 import ResultToolbar from "../components/books/ResultToolbar.vue";
 import BookCard from "../components/books/BookCard.vue";
 
 const router = useRouter();
+const authStore = useAuthStore();
+const ACTIVE_BORROW_STATUSES = ["PENDING", "APPROVED", "BORROWING", "OVERDUE"];
 
 const loading = ref(false);
 const errorMessage = ref("");
 const books = ref([]);
 const voteSummaryByMasach = ref({});
+const myBorrowStatusByBook = ref({});
 
 const searchText = ref("");
 const selectedGenres = ref([]);
 const selectedPublishers = ref([]);
 const selectedAuthors = ref([]);
 const selectedStatuses = ref([]);
+const authorSearchText = ref("");
 const sortBy = ref("newest");
 
 const statusOptions = [
@@ -124,14 +206,42 @@ const sortOptions = [
 ];
 
 const genreOptions = computed(() =>
-  uniqueValues(books.value.flatMap((item) => toArrayField(item.THELOAI))),
+  uniqueValues(books.value.flatMap((item) => getBookGenreNames(item))),
 );
 const publisherOptions = computed(() =>
-  uniqueValues(books.value.map((item) => item.MANXB)),
+  uniqueValues(books.value.map((item) => getBookPublisherName(item))),
 );
 const authorOptions = computed(() =>
-  uniqueValues(books.value.flatMap((item) => toArrayField(item.TACGIA))),
+  uniqueValues(books.value.flatMap((item) => getBookAuthorNames(item))),
 );
+
+const featuredAuthors = computed(() => {
+  const frequencyMap = new Map();
+
+  books.value.forEach((item) => {
+    getBookAuthorNames(item).forEach((author) => {
+      frequencyMap.set(author, (frequencyMap.get(author) || 0) + 1);
+    });
+  });
+
+  return [...frequencyMap.entries()]
+    .sort(
+      (a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), "vi"),
+    )
+    .map(([name]) => name)
+    .slice(0, 8);
+});
+
+const searchedAuthors = computed(() => {
+  const query = normalizeText(authorSearchText.value);
+  if (!query) {
+    return [];
+  }
+
+  return authorOptions.value
+    .filter((author) => normalizeText(author).includes(query))
+    .slice(0, 10);
+});
 
 const filterSections = computed(() => [
   {
@@ -155,18 +265,13 @@ const filterSections = computed(() => [
     })),
     selected: selectedPublishers.value,
   },
-  {
-    key: "authors",
-    title: "Tác giả",
-    options: authorOptions.value.map((item) => ({ label: item, value: item })),
-    selected: selectedAuthors.value,
-  },
 ]);
 
 const filteredBooks = computed(() => {
   let data = books.value.filter((book) => {
-    const bookGenres = toArrayField(book.THELOAI);
-    const bookAuthors = toArrayField(book.TACGIA);
+    const bookGenres = getBookGenreNames(book);
+    const bookAuthors = getBookAuthorNames(book);
+    const publisherName = getBookPublisherName(book);
     const matchesSearch =
       !searchText.value ||
       [book.TENSACH || "", ...bookAuthors]
@@ -180,7 +285,7 @@ const filteredBooks = computed(() => {
 
     const matchesPublisher =
       !selectedPublishers.value.length ||
-      selectedPublishers.value.includes(book.MANXB);
+      selectedPublishers.value.includes(publisherName);
 
     const matchesAuthor =
       !selectedAuthors.value.length ||
@@ -235,6 +340,14 @@ function uniqueValues(values) {
   );
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
 function toArrayField(value) {
   if (Array.isArray(value)) {
     return value.map((item) => String(item || "").trim()).filter(Boolean);
@@ -250,6 +363,28 @@ function toArrayField(value) {
   return [];
 }
 
+function getBookGenreNames(book) {
+  const genreNames = toArrayField(book?.THELOAI_TEN);
+  if (genreNames.length) {
+    return genreNames;
+  }
+
+  return toArrayField(book?.THELOAI);
+}
+
+function getBookAuthorNames(book) {
+  const authorNames = toArrayField(book?.TACGIA_TEN);
+  if (authorNames.length) {
+    return authorNames;
+  }
+
+  return toArrayField(book?.TACGIA);
+}
+
+function getBookPublisherName(book) {
+  return String(book?.MANXB_TEN || book?.MANXB || "").trim();
+}
+
 function updateFilter(key, value) {
   if (key === "statuses") {
     selectedStatuses.value = value;
@@ -261,19 +396,75 @@ function updateFilter(key, value) {
   }
   if (key === "publishers") {
     selectedPublishers.value = value;
+  }
+}
+
+function toggleAuthor(authorName) {
+  const normalized = String(authorName || "").trim();
+  if (!normalized) return;
+
+  if (selectedAuthors.value.includes(normalized)) {
+    selectedAuthors.value = selectedAuthors.value.filter(
+      (item) => item !== normalized,
+    );
     return;
   }
-  if (key === "authors") {
-    selectedAuthors.value = value;
+
+  selectedAuthors.value = [...selectedAuthors.value, normalized];
+}
+
+function parseBorrowResponse(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+function borrowStatusForBook(masach) {
+  if (!masach) return "";
+  return myBorrowStatusByBook.value[masach] || "";
+}
+
+async function fetchMyBorrowStatuses() {
+  if (!authStore.isLoggedIn || !authStore.isReader) {
+    myBorrowStatusByBook.value = {};
+    return;
+  }
+
+  try {
+    const { data } = await api.get("/borrows/my");
+    const items = parseBorrowResponse(data);
+    const statusMap = {};
+
+    items.forEach((item) => {
+      const status = String(item?.TRANGTHAI || "").toUpperCase();
+      const masach = item?.SACH?.MASACH || item?.MASACH;
+
+      if (!masach || !ACTIVE_BORROW_STATUSES.includes(status)) return;
+
+      if (!statusMap[masach]) {
+        statusMap[masach] = status;
+      }
+    });
+
+    myBorrowStatusByBook.value = statusMap;
+  } catch {
+    myBorrowStatusByBook.value = {};
   }
 }
 
 async function handleBorrowFromCard(book) {
   if (!book?.MASACH) return;
 
+  const currentStatus = borrowStatusForBook(book.MASACH);
+  if (ACTIVE_BORROW_STATUSES.includes(currentStatus)) {
+    window.alert("Bạn đã có phiếu mượn/yêu cầu đang hoạt động cho sách này.");
+    return;
+  }
+
   try {
     await api.post("/borrows/request", { MASACH: book.MASACH });
     window.alert("Đã gửi yêu cầu mượn sách thành công.");
+    await fetchMyBorrowStatuses();
   } catch (error) {
     window.alert(
       error?.response?.data?.message || "Không thể gửi yêu cầu mượn lúc này.",
@@ -323,6 +514,7 @@ function resetFilters() {
   selectedPublishers.value = [];
   selectedAuthors.value = [];
   selectedStatuses.value = [];
+  authorSearchText.value = "";
   sortBy.value = "newest";
 }
 
@@ -343,5 +535,7 @@ async function fetchBooks() {
   }
 }
 
-onMounted(fetchBooks);
+onMounted(async () => {
+  await Promise.all([fetchBooks(), fetchMyBorrowStatuses()]);
+});
 </script>

@@ -23,11 +23,14 @@ const {
   createPublisher,
   updatePublisher,
   deletePublisher,
+  getDashboardSummary,
 } = require("../controllers/adminMetaController");
 
 const router = express.Router();
 
 router.use(authenticate, authorizeRoles("staff"));
+
+router.get("/dashboard-summary", getDashboardSummary);
 
 router.get("/authors", getAuthors);
 router.get("/authors/next-code", getNextAuthorCodePreview);

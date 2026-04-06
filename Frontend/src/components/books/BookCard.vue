@@ -1,6 +1,6 @@
 <template>
   <article
-    class="cursor-pointer overflow-hidden rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] shadow-[0_6px_24px_rgb(54_58_39/10%)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgb(54_58_39/14%)]"
+    class="flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] shadow-[0_6px_24px_rgb(54_58_39/10%)] transition hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgb(54_58_39/14%)]"
     @click="emit('detail', book)"
   >
     <div
@@ -19,16 +19,16 @@
       <span
         class="absolute right-4 top-4 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide"
         :class="
-          isAvailable
+          isAvailable && !isBorrowLocked
             ? 'bg-[var(--primary)] text-white'
             : 'bg-[var(--outline)] text-white'
         "
       >
-        {{ isAvailable ? "Còn sách" : unavailableLabel }}
+        {{ isAvailable && !isBorrowLocked ? "Còn sách" : unavailableLabel }}
       </span>
     </div>
 
-    <div class="space-y-2 p-5">
+    <div class="flex flex-1 flex-col gap-2 p-5">
       <div class="flex items-center gap-1">
         <span
           v-for="star in 5"
@@ -50,11 +50,11 @@
         {{ book.TENSACH }}
       </h3>
 
-      <p class="text-sm text-[var(--on-surface-variant)]">
+      <p class="line-clamp-1 text-sm text-[var(--on-surface-variant)]">
         {{ authorText }}
       </p>
 
-      <p class="text-sm text-[var(--on-surface-variant)]">
+      <p class="line-clamp-1 text-sm text-[var(--on-surface-variant)]">
         Thể loại: {{ genreText }}
       </p>
 
@@ -65,16 +65,16 @@
       <button
         type="button"
         :class="
-          isAvailable
-            ? 'mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 py-3 text-base font-bold text-white transition hover:brightness-95'
-            : 'mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--outline-variant)] bg-white px-5 py-3 text-base font-bold text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-high)]'
+          isAvailable && !isBorrowLocked
+            ? 'mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 py-3 text-base font-bold text-white transition hover:brightness-95'
+            : 'mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--outline-variant)] bg-white px-5 py-3 text-base font-bold text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-high)]'
         "
         @click.stop="onActionClick"
       >
         <span class="material-symbols-outlined text-[20px]">{{
-          isAvailable ? "menu_book" : "visibility"
+          actionIcon
         }}</span>
-        {{ isAvailable ? "Mượn ngay" : "Xem chi tiết" }}
+        {{ actionLabel }}
       </button>
     </div>
   </article>
@@ -87,6 +87,10 @@ const props = defineProps({
   book: {
     type: Object,
     required: true,
+  },
+  borrowStatus: {
+    type: String,
+    default: "",
   },
   averageScore: {
     type: [Number, String],
@@ -101,10 +105,20 @@ const props = defineProps({
 const emit = defineEmits(["borrow", "detail"]);
 
 const isAvailable = computed(() => Number(props.book.SOQUYEN || 0) > 0);
+const normalizedBorrowStatus = computed(() =>
+  String(props.borrowStatus || "")
+    .trim()
+    .toUpperCase(),
+);
+const isBorrowLocked = computed(() =>
+  ["PENDING", "APPROVED", "BORROWING", "OVERDUE"].includes(
+    normalizedBorrowStatus.value,
+  ),
+);
 const averageValue = computed(() => Number(props.averageScore || 0));
 const ratingText = computed(() => Number(props.averageScore || 0).toFixed(1));
 const authorText = computed(() => {
-  const value = props.book.TACGIA;
+  const value = props.book.TACGIA_TEN || props.book.TACGIA;
   if (Array.isArray(value)) {
     return value.filter(Boolean).join(", ") || "Chưa rõ tác giả";
   }
@@ -123,8 +137,34 @@ const isBorrowedStatus = computed(() => {
   return status.includes("dang") && status.includes("muon");
 });
 
-const unavailableLabel = computed(() =>
-  isBorrowedStatus.value ? "Đang mượn" : "Hết sách",
+const borrowStatusLabel = computed(() => {
+  const map = {
+    PENDING: "Đang đăng ký",
+    APPROVED: "Đã duyệt",
+    BORROWING: "Đang mượn",
+    OVERDUE: "Quá hạn",
+  };
+
+  return map[normalizedBorrowStatus.value] || "";
+});
+
+const actionLabel = computed(() => {
+  if (normalizedBorrowStatus.value === "PENDING") return "Đang đăng ký";
+  if (normalizedBorrowStatus.value === "APPROVED") return "Đã duyệt - chờ nhận";
+  if (normalizedBorrowStatus.value === "BORROWING") return "Đang mượn";
+  if (normalizedBorrowStatus.value === "OVERDUE") return "Đang quá hạn";
+  return isAvailable.value ? "Mượn ngay" : "Xem chi tiết";
+});
+
+const actionIcon = computed(() => {
+  if (isBorrowLocked.value) return "schedule";
+  return isAvailable.value ? "menu_book" : "visibility";
+});
+
+const unavailableLabel = computed(
+  () =>
+    borrowStatusLabel.value ||
+    (isBorrowedStatus.value ? "Đang mượn" : "Hết sách"),
 );
 
 const cover = computed(() => {
@@ -139,7 +179,7 @@ const cover = computed(() => {
 });
 
 function onActionClick() {
-  if (isAvailable.value) {
+  if (isAvailable.value && !isBorrowLocked.value) {
     emit("borrow", props.book);
     return;
   }

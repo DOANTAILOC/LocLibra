@@ -16,11 +16,10 @@
           <button
             type="button"
             class="btn-primary flex-1 py-3 text-xs disabled:cursor-not-allowed disabled:opacity-45"
-            :disabled="borrowing || !isAvailable"
+            :disabled="borrowDisabled"
             @click="emit('borrow')"
           >
-            <span v-if="borrowing">Đang gửi yêu cầu...</span>
-            <span v-else>Mượn sách</span>
+            <span>{{ borrowActionLabel }}</span>
           </button>
           <button
             type="button"
@@ -37,12 +36,12 @@
         <span
           class="inline-flex items-center rounded-full px-4 py-1 text-[10px] font-bold tracking-[0.14em] uppercase"
           :class="
-            isAvailable
+            isAvailable && !borrowStatusLabel
               ? 'bg-[var(--primary-container)] text-[var(--on-primary-container)]'
               : 'bg-[var(--surface-variant)] text-[var(--on-surface-variant)]'
           "
         >
-          {{ isAvailable ? "Đang có sẵn" : "Hết sách" }}
+          {{ borrowStatusLabel || (isAvailable ? "Đang có sẵn" : "Hết sách") }}
         </span>
         <h1
           class="mt-4 font-headline text-4xl leading-tight text-[var(--on-surface)] md:text-5xl"
@@ -118,10 +117,22 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  borrowActionLabel: {
+    type: String,
+    default: "Mượn sách",
+  },
+  borrowStatusLabel: {
+    type: String,
+    default: "",
+  },
+  borrowDisabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const authorText = computed(() => {
-  const value = props.book?.TACGIA;
+  const value = props.book?.TACGIA_TEN || props.book?.TACGIA;
   if (Array.isArray(value)) {
     return value.filter(Boolean).join(", ") || "Chưa rõ";
   }

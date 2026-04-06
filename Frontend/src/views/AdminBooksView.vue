@@ -61,14 +61,14 @@
           <AdminFilterBar>
             <div class="relative min-w-[240px] flex-1">
               <span
-                class="material-symbols-outlined absolute inset-y-0 left-3 flex items-center text-sm text-[var(--on-surface-variant)]"
+                class="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] leading-none text-[var(--on-surface-variant)]"
               >
                 search
               </span>
               <input
                 v-model.trim="searchText"
                 type="text"
-                class="w-full rounded-lg border border-[rgb(184_188_163/25%)] bg-[var(--surface-container-lowest)] py-2 pl-9 pr-4 text-sm focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+                class="w-full rounded-lg border border-[rgb(184_188_163/25%)] bg-[var(--surface-container-lowest)] py-2 pl-11 pr-4 text-sm focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
                 placeholder="Tên sách, tác giả hoặc mã sách..."
               />
             </div>

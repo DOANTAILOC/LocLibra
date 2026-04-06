@@ -53,14 +53,14 @@
           <AdminFilterBar>
             <div class="relative min-w-[240px] flex-1">
               <span
-                class="material-symbols-outlined absolute inset-y-0 left-3 flex items-center text-sm text-[var(--on-surface-variant)]"
+                class="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] leading-none text-[var(--on-surface-variant)]"
               >
                 search
               </span>
               <input
                 type="text"
                 v-model.trim="searchText"
-                class="w-full rounded-lg border border-[rgb(184_188_163/25%)] bg-[var(--surface-container-lowest)] py-2 pl-9 pr-4 text-sm focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
+                class="w-full rounded-lg border border-[rgb(184_188_163/25%)] bg-[var(--surface-container-lowest)] py-2 pl-11 pr-4 text-sm focus:border-[var(--primary)] focus:ring-1 focus:ring-[var(--primary)]"
                 placeholder="Tên thành viên, mã phiếu hoặc mã sách..."
               />
             </div>
@@ -74,6 +74,7 @@
                 <option value="PENDING">CHỜ DUYỆT</option>
                 <option value="APPROVED">ĐÃ DUYỆT</option>
                 <option value="BORROWING">ĐANG MƯỢN</option>
+                <option value="EXTENSION_PENDING">XIN GIA HẠN</option>
                 <option value="OVERDUE">QUÁ HẠN</option>
                 <option value="RETURNED">ĐÃ TRẢ</option>
                 <option value="LOST">MẤT SÁCH</option>
@@ -188,7 +189,7 @@
                 <td class="px-4 py-4 text-center">
                   <StatusChip
                     :label="loan.statusLabel"
-                    :custom-class="statusChipClass(loan.status)"
+                    :custom-class="statusChipClass(loan.displayStatus)"
                   />
                 </td>
                 <td class="px-6 py-4 text-right">
@@ -284,7 +285,7 @@
               <span class="text-[var(--on-surface-variant)]">Trạng thái</span>
               <StatusChip
                 :label="selectedLoan.statusLabel"
-                :custom-class="statusChipClass(selectedLoan.status)"
+                :custom-class="statusChipClass(selectedLoan.displayStatus)"
               />
             </div>
             <p class="mt-2 text-[11px] text-[var(--on-surface-variant)]">
@@ -463,6 +464,7 @@ const statusLabelMap = {
   APPROVED: "Đã duyệt",
   REJECTED: "Từ chối",
   BORROWING: "Đang mượn",
+  EXTENSION_PENDING: "Xin gia hạn",
   OVERDUE: "Quá hạn",
   RETURNED: "Đã trả",
   LOST: "Mất sách",
@@ -475,7 +477,7 @@ const filteredRows = computed(() => {
   return rawBorrows.value.filter((item) => {
     if (
       selectedStatus.value !== "ALL" &&
-      item.status !== selectedStatus.value
+      item.displayStatus !== selectedStatus.value
     ) {
       return false;
     }
@@ -554,6 +556,9 @@ function formatDate(dateValue) {
 }
 
 function formatBorrowItem(item) {
+  const displayStatus =
+    item.TRANGTHAI_GIA_HAN === "PENDING" ? "EXTENSION_PENDING" : item.TRANGTHAI;
+
   return {
     id: item._id,
     code: `PM-${item._id.slice(-6).toUpperCase()}`,
@@ -565,7 +570,11 @@ function formatBorrowItem(item) {
     borrowedAt: formatDate(item.NGAYMUON || item.NGAYYEUCAU),
     dueAt: formatDate(item.NGAYHENTRA),
     status: item.TRANGTHAI,
-    statusLabel: statusLabelMap[item.TRANGTHAI] || item.TRANGTHAI,
+    displayStatus,
+    statusLabel:
+      statusLabelMap[displayStatus] ||
+      statusLabelMap[item.TRANGTHAI] ||
+      item.TRANGTHAI,
     fineAmount: item.TIENPHAT || 0,
     fineStatus: item.TRANGTHAI_PHAT || "PAID",
     extensionCount: Number(item.SO_LAN_GIA_HAN || 0),
@@ -707,6 +716,9 @@ onMounted(async () => {
 watch(selectedStatus, fetchBorrows);
 
 function statusChipClass(status) {
+  if (status === "EXTENSION_PENDING") {
+    return "bg-[var(--primary-container)] text-[var(--on-primary-container)]";
+  }
   if (status === "OVERDUE") return "status-chip-overdue";
   if (status === "RETURNED") return "status-chip-returned";
   if (status === "LOST") {

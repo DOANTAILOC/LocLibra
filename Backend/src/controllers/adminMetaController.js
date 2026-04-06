@@ -2,6 +2,9 @@ const Author = require("../models/Author");
 const Genre = require("../models/Genre");
 const Staff = require("../models/Staff");
 const Publisher = require("../models/Publisher");
+const Book = require("../models/Book");
+const Borrow = require("../models/Borrow");
+const Reader = require("../models/Reader");
 
 const toRegex = (q) => ({ $regex: q, $options: "i" });
 
@@ -49,6 +52,131 @@ const generateNextGenreCode = async () => {
 
 const normalizeError = (res, message, error, status = 500) => {
   return res.status(status).json({ message, error: error.message });
+};
+
+const BORROW_STATUS_LABEL = {
+  PENDING: "Chờ duyệt",
+  APPROVED: "Đã duyệt",
+  REJECTED: "Từ chối",
+  BORROWING: "Đang mượn",
+  OVERDUE: "Quá hạn",
+  RETURNED: "Đã trả",
+  LOST: "Mất sách",
+  CANCELLED: "Đã hủy",
+};
+
+const toDisplayBorrowStatus = (borrow) => {
+  if (
+    borrow?.TRANGTHAI_GIA_HAN === "PENDING" &&
+    ["BORROWING", "OVERDUE"].includes(String(borrow?.TRANGTHAI || ""))
+  ) {
+    return { status: "extension_pending", statusLabel: "Xin gia hạn" };
+  }
+
+  const base = String(borrow?.TRANGTHAI || "").toUpperCase();
+  return {
+    status: base.toLowerCase(),
+    statusLabel: BORROW_STATUS_LABEL[base] || "Không rõ",
+  };
+};
+
+const getReaderFullName = (reader) => {
+  if (!reader) return "Không rõ";
+  const fullName = [reader.HOLOT, reader.TEN]
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  return fullName || "Không rõ";
+};
+
+const getDashboardSummary = async (req, res) => {
+  try {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+
+    const [
+      totalTitles,
+      totalCopiesAgg,
+      activeBorrowCount,
+      newMembersThisMonth,
+      pendingRequests,
+      totalBorrowRecords,
+      recentBorrows,
+    ] = await Promise.all([
+      Book.countDocuments({ TRANGTHAI: { $ne: "DELETED" } }),
+      Book.aggregate([
+        { $match: { TRANGTHAI: { $ne: "DELETED" } } },
+        {
+          $group: {
+            _id: null,
+            totalCopies: { $sum: { $ifNull: ["$SOQUYEN", 0] } },
+          },
+        },
+      ]),
+      Borrow.countDocuments({ TRANGTHAI: { $in: ["BORROWING", "OVERDUE"] } }),
+      Reader.countDocuments({ created_at: { $gte: monthStart } }),
+      Borrow.countDocuments({
+        $or: [{ TRANGTHAI: "PENDING" }, { TRANGTHAI_GIA_HAN: "PENDING" }],
+      }),
+      Borrow.countDocuments({}),
+      Borrow.find({}).sort({ NGAYYEUCAU: -1, created_at: -1 }).limit(10).lean(),
+    ]);
+
+    const masachList = [
+      ...new Set(recentBorrows.map((item) => item.MASACH).filter(Boolean)),
+    ];
+    const madocgiaList = [
+      ...new Set(recentBorrows.map((item) => item.MADOCGIA).filter(Boolean)),
+    ];
+
+    const [books, readers] = await Promise.all([
+      Book.find({ MASACH: { $in: masachList } })
+        .select("MASACH TENSACH TACGIA")
+        .lean(),
+      Reader.find({ MADOCGIA: { $in: madocgiaList } })
+        .select("MADOCGIA HOLOT TEN")
+        .lean(),
+    ]);
+
+    const booksMap = new Map(books.map((item) => [item.MASACH, item]));
+    const readersMap = new Map(readers.map((item) => [item.MADOCGIA, item]));
+
+    const recentBorrowRows = recentBorrows.map((item) => {
+      const book = booksMap.get(item.MASACH);
+      const reader = readersMap.get(item.MADOCGIA);
+      const authorNames = Array.isArray(book?.TACGIA)
+        ? book.TACGIA.filter(Boolean).join(", ")
+        : String(book?.TACGIA || "").trim();
+      const displayStatus = toDisplayBorrowStatus(item);
+
+      return {
+        id: String(item._id),
+        book: book?.TENSACH || "Không rõ",
+        author: authorNames || "Không rõ",
+        member: getReaderFullName(reader),
+        memberId: reader?.MADOCGIA || item.MADOCGIA || "Không rõ",
+        borrowedAt: item.NGAYMUON || item.NGAYNHAN || item.NGAYYEUCAU || null,
+        dueAt: item.NGAYHENTRA || null,
+        status: displayStatus.status,
+        statusLabel: displayStatus.statusLabel,
+      };
+    });
+
+    return res.status(200).json({
+      stats: {
+        totalBooks: Number(totalCopiesAgg?.[0]?.totalCopies || 0),
+        totalTitles,
+        activeBorrowCount,
+        newMembersThisMonth,
+        pendingRequests,
+        totalBorrowRecords,
+      },
+      recentBorrowRows,
+    });
+  } catch (error) {
+    return normalizeError(res, "Lỗi khi lấy dữ liệu dashboard", error);
+  }
 };
 
 const getAuthors = async (req, res) => {
@@ -402,4 +530,5 @@ module.exports = {
   createPublisher,
   updatePublisher,
   deletePublisher,
+  getDashboardSummary,
 };

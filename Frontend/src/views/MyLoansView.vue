@@ -46,21 +46,32 @@
     </section>
 
     <section class="panel-surface mb-6 p-4">
-      <div class="flex flex-col gap-3 md:flex-row">
+      <div class="flex flex-col gap-3 md:flex-row md:items-center">
         <div class="relative flex-1">
           <span
-            class="material-symbols-outlined absolute inset-y-0 left-3 flex items-center text-sm text-[var(--on-surface-variant)]"
+            class="material-symbols-outlined pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[20px] leading-none text-[var(--on-surface-variant)]"
             >search</span
           >
           <input
             v-model.trim="searchText"
             type="text"
-            class="form-input pl-9"
-            placeholder="Tìm theo mã phiếu, mã sách hoặc tên sách..."
+            class="form-input !pl-11 !pr-12"
+            placeholder="Tìm mã phiếu, tên sách, mã sách hoặc tác giả..."
           />
+          <button
+            v-if="searchText"
+            type="button"
+            class="absolute inset-y-0 right-2 inline-flex items-center rounded-md px-2 text-[var(--on-surface-variant)] transition hover:text-[var(--primary)]"
+            @click="searchText = ''"
+          >
+            <span class="material-symbols-outlined text-[18px]">close</span>
+          </button>
         </div>
 
-        <select v-model="selectedStatus" class="form-select w-full md:w-72">
+        <select
+          v-model="selectedStatus"
+          class="form-select !w-full md:!w-64 md:flex-none"
+        >
           <option value="ALL">Tất cả trạng thái</option>
           <option
             v-for="status in availableStatuses"
@@ -372,7 +383,7 @@ const canRequestExtension = computed(() => {
 });
 
 const filteredBorrows = computed(() => {
-  const keyword = searchText.value.toLowerCase();
+  const keyword = normalizeSearchText(searchText.value);
 
   return normalizedBorrows.value.filter((item) => {
     const matchesStatus =
@@ -383,11 +394,14 @@ const filteredBorrows = computed(() => {
       item.bookCode,
       item.bookTitle,
       item.bookAuthors.join(" "),
+      statusLabel(item.status),
+      extensionRequestStatusLabel(item.extensionRequestStatus),
     ]
       .join(" ")
-      .toLowerCase();
+      .trim();
 
-    const matchesSearch = !keyword || haystack.includes(keyword);
+    const matchesSearch =
+      !keyword || normalizeSearchText(haystack).includes(keyword);
 
     return matchesStatus && matchesSearch;
   });
@@ -417,7 +431,6 @@ const statCards = computed(() => {
     { key: "RETURNED", label: "Đã trả", value: byStatus.RETURNED || 0 },
     { key: "LOST", label: "Mất sách", value: byStatus.LOST || 0 },
     { key: "REJECTED", label: "Từ chối", value: byStatus.REJECTED || 0 },
-    { key: "CANCELLED", label: "Đã hủy", value: byStatus.CANCELLED || 0 },
   ];
 });
 
@@ -453,6 +466,13 @@ function parseBorrowResponse(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.items)) return payload.items;
   return [];
+}
+
+function normalizeSearchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function statusLabel(status) {

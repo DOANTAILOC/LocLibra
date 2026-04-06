@@ -1,6 +1,7 @@
 const Book = require("../models/Book");
 const Author = require("../models/Author");
 const Genre = require("../models/Genre");
+const Publisher = require("../models/Publisher");
 const cloudinary = require("../config/cloudinary");
 
 const normalizeStringArray = (value) => {
@@ -60,10 +61,35 @@ const buildGenreNameMap = async () => {
   );
 };
 
-const enrichBookForResponse = (book, authorNameMap, genreNameMap) => {
+const buildPublisherNameMap = async () => {
+  const publishers = await Publisher.find({
+    MANXB: { $exists: true, $ne: null },
+  })
+    .select("MANXB TENNXB")
+    .lean();
+
+  return new Map(
+    publishers.map((item) => [
+      String(item.MANXB || "")
+        .trim()
+        .toUpperCase(),
+      String(item.TENNXB || "").trim(),
+    ]),
+  );
+};
+
+const enrichBookForResponse = (
+  book,
+  authorNameMap,
+  genreNameMap,
+  publisherNameMap,
+) => {
   const data = book?.toObject ? book.toObject() : { ...book };
   const authorCodes = normalizeCodeArray(data.TACGIA);
   const genreCodes = normalizeCodeArray(data.THELOAI);
+  const publisherCode = String(data.MANXB || "")
+    .trim()
+    .toUpperCase();
 
   return {
     ...data,
@@ -71,6 +97,7 @@ const enrichBookForResponse = (book, authorNameMap, genreNameMap) => {
     THELOAI: genreCodes,
     TACGIA_TEN: authorCodes.map((code) => authorNameMap.get(code) || code),
     THELOAI_TEN: genreCodes.map((code) => genreNameMap.get(code) || code),
+    MANXB_TEN: publisherNameMap.get(publisherCode) || data.MANXB || null,
   };
 };
 
@@ -176,14 +203,21 @@ const getBooks = async (req, res) => {
     if (nhaxuatban) filter.MANXB = nhaxuatban;
     if (tensach) filter.TENSACH = { $regex: tensach, $options: "i" };
 
-    const [books, authorNameMap, genreNameMap] = await Promise.all([
-      Book.find(filter).sort({ created_at: -1 }),
-      buildAuthorNameMap(),
-      buildGenreNameMap(),
-    ]);
+    const [books, authorNameMap, genreNameMap, publisherNameMap] =
+      await Promise.all([
+        Book.find(filter).sort({ created_at: -1 }),
+        buildAuthorNameMap(),
+        buildGenreNameMap(),
+        buildPublisherNameMap(),
+      ]);
 
     const items = books.map((item) =>
-      enrichBookForResponse(item, authorNameMap, genreNameMap),
+      enrichBookForResponse(
+        item,
+        authorNameMap,
+        genreNameMap,
+        publisherNameMap,
+      ),
     );
 
     return res.status(200).json(items);
@@ -196,14 +230,16 @@ const getBooks = async (req, res) => {
 
 const getBookById = async (req, res) => {
   try {
-    const [book, authorNameMap, genreNameMap] = await Promise.all([
-      Book.findOne({
-        _id: req.params.id,
-        TRANGTHAI: { $ne: "DELETED" },
-      }),
-      buildAuthorNameMap(),
-      buildGenreNameMap(),
-    ]);
+    const [book, authorNameMap, genreNameMap, publisherNameMap] =
+      await Promise.all([
+        Book.findOne({
+          _id: req.params.id,
+          TRANGTHAI: { $ne: "DELETED" },
+        }),
+        buildAuthorNameMap(),
+        buildGenreNameMap(),
+        buildPublisherNameMap(),
+      ]);
 
     if (!book) {
       return res.status(404).json({ message: "Không tìm thấy sách" });
@@ -211,7 +247,14 @@ const getBookById = async (req, res) => {
 
     return res
       .status(200)
-      .json(enrichBookForResponse(book, authorNameMap, genreNameMap));
+      .json(
+        enrichBookForResponse(
+          book,
+          authorNameMap,
+          genreNameMap,
+          publisherNameMap,
+        ),
+      );
   } catch (error) {
     return res
       .status(500)
