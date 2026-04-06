@@ -192,7 +192,7 @@
               >
                 <span
                   class="material-symbols-outlined text-6xl text-[var(--primary)]"
-                  style="font-variation-settings: &quot;FILL&quot; 1"
+                  :style="{ fontVariationSettings: '&quot;FILL&quot; 1' }"
                 >
                   cloud_sync
                 </span>
