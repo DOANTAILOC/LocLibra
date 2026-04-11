@@ -33,6 +33,16 @@ const readerSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    AVATAR_URL: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    AVATAR_PUBLIC_ID: {
+      type: String,
+      trim: true,
+      default: "",
+    },
     NO_PHAT: {
       type: Number,
       min: 0,

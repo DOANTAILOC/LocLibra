@@ -75,6 +75,16 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
+  function setProfile(profile) {
+    if (!user.value) return;
+
+    user.value = {
+      ...user.value,
+      profile: profile || null,
+    };
+    localStorage.setItem("user", JSON.stringify(user.value));
+  }
+
   return {
     token,
     user,
@@ -86,5 +96,6 @@ export const useAuthStore = defineStore("auth", () => {
     registerStaff,
     verifyAuth,
     logout,
+    setProfile,
   };
 });

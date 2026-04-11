@@ -3,6 +3,7 @@ const Staff = require("../models/Staff");
 const Reader = require("../models/Reader");
 const Account = require("../models/Account");
 const Borrow = require("../models/Borrow");
+const cloudinary = require("../config/cloudinary");
 
 const getRedirectPathByRole = (role) => {
   return role === "staff" ? "/" : "/my-loans";
@@ -29,6 +30,23 @@ const generateReaderCode = async () => {
   }
 
   return code;
+};
+
+const uploadBufferToCloudinary = (buffer, folder) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        return resolve(result);
+      },
+    );
+
+    stream.end(buffer);
+  });
 };
 
 const registerStaff = async (req, res) => {
@@ -325,12 +343,123 @@ const getReadersForStaff = async (req, res) => {
 
     return res.status(200).json({ items, total: items.length });
   } catch (error) {
-    return res
-      .status(500)
-      .json({
-        message: "Lỗi khi lấy danh sách thành viên",
-        error: error.message,
-      });
+    return res.status(500).json({
+      message: "Lỗi khi lấy danh sách thành viên",
+      error: error.message,
+    });
+  }
+};
+
+const updateMyReaderProfile = async (req, res) => {
+  try {
+    if (!req.account?.readerId) {
+      return res.status(403).json({ message: "Tài khoản không phải độc giả" });
+    }
+
+    const allowedFields = [
+      "HOLOT",
+      "TEN",
+      "NGAYSINH",
+      "PHAI",
+      "DIACHI",
+      "DIENTHOAI",
+    ];
+    const payload = {};
+
+    allowedFields.forEach((field) => {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field)) return;
+
+      if (["HOLOT", "TEN", "DIACHI", "DIENTHOAI", "PHAI"].includes(field)) {
+        payload[field] = String(req.body[field] || "").trim();
+        return;
+      }
+
+      payload[field] = req.body[field];
+    });
+
+    if (Object.prototype.hasOwnProperty.call(payload, "NGAYSINH")) {
+      if (!payload.NGAYSINH) {
+        payload.NGAYSINH = null;
+      } else {
+        const parsedDate = new Date(payload.NGAYSINH);
+        if (Number.isNaN(parsedDate.getTime())) {
+          return res.status(400).json({ message: "Ngày sinh không hợp lệ" });
+        }
+        payload.NGAYSINH = parsedDate;
+      }
+    }
+
+    if (payload.PHAI && !["Nam", "Nữ", "Khác"].includes(payload.PHAI)) {
+      return res.status(400).json({ message: "Giới tính không hợp lệ" });
+    }
+
+    const profile = await Reader.findByIdAndUpdate(
+      req.account.readerId,
+      payload,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!profile) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ độc giả" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật thông tin cá nhân thành công",
+      profile,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: "Lỗi khi cập nhật thông tin cá nhân",
+      error: error.message,
+    });
+  }
+};
+
+const uploadMyAvatar = async (req, res) => {
+  try {
+    if (!req.account?.readerId) {
+      return res.status(403).json({ message: "Tài khoản không phải độc giả" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Vui lòng chọn ảnh avatar" });
+    }
+
+    const profile = await Reader.findById(req.account.readerId);
+    if (!profile) {
+      return res.status(404).json({ message: "Không tìm thấy hồ sơ độc giả" });
+    }
+
+    const uploadResult = await uploadBufferToCloudinary(
+      req.file.buffer,
+      "loclibrary/avatars",
+    );
+
+    const oldPublicId = profile.AVATAR_PUBLIC_ID;
+    profile.AVATAR_URL = uploadResult.secure_url || "";
+    profile.AVATAR_PUBLIC_ID = uploadResult.public_id || "";
+    await profile.save();
+
+    if (oldPublicId && oldPublicId !== profile.AVATAR_PUBLIC_ID) {
+      cloudinary.uploader.destroy(oldPublicId).catch(() => null);
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật avatar thành công",
+      avatar: {
+        url: profile.AVATAR_URL,
+        publicId: profile.AVATAR_PUBLIC_ID,
+      },
+      profile,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: "Lỗi khi tải ảnh avatar",
+      error: error.message,
+    });
   }
 };
 
@@ -340,4 +469,6 @@ module.exports = {
   login,
   verifyToken,
   getReadersForStaff,
+  updateMyReaderProfile,
+  uploadMyAvatar,
 };

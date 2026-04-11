@@ -79,11 +79,17 @@
 
         <button
           type="button"
-          class="inline-flex h-10 min-w-10 items-center justify-center rounded-full bg-[var(--primary)] px-2 text-sm font-bold uppercase text-white"
+          class="inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)] text-sm font-bold uppercase text-white"
           :title="displayName"
           @click="toggleAccountMenu"
         >
-          {{ avatarText }}
+          <img
+            v-if="avatarUrl"
+            :src="avatarUrl"
+            alt="Avatar"
+            class="h-full w-full object-cover"
+          />
+          <span v-else>{{ avatarText }}</span>
         </button>
 
         <div
@@ -94,9 +100,15 @@
             class="mb-4 flex items-center gap-3 border-b border-[var(--outline-variant)] pb-3"
           >
             <div
-              class="inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary)] text-sm font-bold uppercase text-white"
+              class="inline-flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)] text-sm font-bold uppercase text-white"
             >
-              {{ avatarText }}
+              <img
+                v-if="avatarUrl"
+                :src="avatarUrl"
+                alt="Avatar"
+                class="h-full w-full object-cover"
+              />
+              <span v-else>{{ avatarText }}</span>
             </div>
             <div>
               <p class="text-sm font-semibold text-[var(--on-surface)]">
@@ -179,6 +191,10 @@ const avatarText = computed(() => {
   const source = displayName.value.trim();
   return source ? source.slice(0, 2) : "RL";
 });
+
+const avatarUrl = computed(() =>
+  String(authStore.user?.profile?.AVATAR_URL || "").trim(),
+);
 
 function toggleAccountMenu() {
   isAccountMenuOpen.value = !isAccountMenuOpen.value;

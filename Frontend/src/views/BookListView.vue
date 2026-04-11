@@ -149,7 +149,7 @@
           class="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3"
         >
           <BookCard
-            v-for="book in filteredBooks"
+            v-for="book in paginatedBooks"
             :key="book._id || book.MASACH"
             :book="book"
             :borrow-status="borrowStatusForBook(book.MASACH)"
@@ -159,13 +159,25 @@
             @borrow="handleBorrowFromCard"
           />
         </div>
+
+        <PaginationBar
+          v-if="totalPages > 1"
+          class="mt-6"
+          :range-label="pageRangeLabel"
+          :current-page="currentPage"
+          :total-pages="totalPages"
+          :boxed="true"
+          :scroll-to-top-on-change="true"
+          :scroll-top-offset="0"
+          @update:current-page="goToPage"
+        />
       </section>
     </section>
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import api from "../api/axios";
 import { useAuthStore } from "../stores/auth";
@@ -173,6 +185,7 @@ import SearchBar from "../components/books/SearchBar.vue";
 import FilterSection from "../components/books/FilterSection.vue";
 import ResultToolbar from "../components/books/ResultToolbar.vue";
 import BookCard from "../components/books/BookCard.vue";
+import PaginationBar from "../components/shared/PaginationBar.vue";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -191,6 +204,8 @@ const selectedAuthors = ref([]);
 const selectedStatuses = ref([]);
 const authorSearchText = ref("");
 const sortBy = ref("newest");
+const pageSize = 12;
+const currentPage = ref(1);
 
 const statusOptions = [
   { label: "Còn sách", value: "available" },
@@ -333,6 +348,52 @@ const filteredBooks = computed(() => {
 
   return data;
 });
+
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredBooks.value.length / pageSize)),
+);
+
+const paginatedBooks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredBooks.value.slice(start, start + pageSize);
+});
+
+const pageRangeLabel = computed(() => {
+  const total = filteredBooks.value.length;
+  if (!total) return "0 - 0 trên 0 đầu sách";
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(start + pageSize - 1, total);
+  return `${start} - ${end} trên ${total} đầu sách`;
+});
+
+watch(filteredBooks, (rows) => {
+  const maxPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+});
+
+watch(
+  [
+    searchText,
+    selectedGenres,
+    selectedPublishers,
+    selectedAuthors,
+    selectedStatuses,
+    authorSearchText,
+    sortBy,
+  ],
+  () => {
+    currentPage.value = 1;
+  },
+);
+
+function goToPage(page) {
+  const pageNumber = Number(page);
+  if (!Number.isInteger(pageNumber)) return;
+  if (pageNumber < 1 || pageNumber > totalPages.value) return;
+  currentPage.value = pageNumber;
+}
 
 function uniqueValues(values) {
   return [...new Set(values.filter(Boolean))].sort((a, b) =>

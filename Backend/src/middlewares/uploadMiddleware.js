@@ -16,6 +16,13 @@ const uploadBookCover = multer({
   fileFilter: imageFileFilter,
 }).single("cover");
 
+const uploadAvatar = multer({
+  storage,
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: imageFileFilter,
+}).single("avatar");
+
 module.exports = {
   uploadBookCover,
+  uploadAvatar,
 };

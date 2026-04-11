@@ -124,12 +124,42 @@ const authorText = computed(() => {
   }
   return value || "Chưa rõ tác giả";
 });
-const genreText = computed(() => {
-  const value = props.book.THELOAI;
+
+function normalizeListValue(value) {
   if (Array.isArray(value)) {
-    return value.filter(Boolean).join(", ") || "Chưa phân loại";
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          return String(item.name || item.TENTL || item.label || "").trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
   }
-  return value || "Chưa phân loại";
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
+const genreText = computed(() => {
+  const genreNames = normalizeListValue(props.book.THELOAI_TEN);
+  if (genreNames.length) {
+    return genreNames.join(", ");
+  }
+
+  const genreFallback = normalizeListValue(props.book.THELOAI);
+  if (genreFallback.length) {
+    return genreFallback.join(", ");
+  }
+
+  return "Chưa phân loại";
 });
 
 const isBorrowedStatus = computed(() => {

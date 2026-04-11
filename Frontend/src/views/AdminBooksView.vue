@@ -164,7 +164,7 @@
             </template>
             <template #rows>
               <tr
-                v-for="book in filteredBooks"
+                v-for="book in paginatedBooks"
                 :key="book.id"
                 class="group cursor-pointer border-l-4 transition-colors"
                 :class="
@@ -201,13 +201,11 @@
                   </p>
                 </td>
                 <td class="px-4 py-4 text-center">
-                  <span class="text-sm font-bold text-[var(--primary)]">{{
-                    book.quantity
-                  }}</span>
-                  <p
-                    class="text-[9px] font-bold tracking-tight text-[var(--on-surface-variant)] uppercase"
-                  >
-                    Quyển
+                  <p class="text-sm font-bold text-[var(--primary)]">
+                    Tổng: {{ book.totalCopies }}
+                  </p>
+                  <p class="text-[11px] text-[var(--on-surface-variant)]">
+                    Còn: {{ book.remainingCopies }}
                   </p>
                 </td>
                 <td class="px-4 py-4 text-center">
@@ -246,6 +244,16 @@
                 </td>
               </tr>
             </template>
+            <template #footer>
+              <PaginationBar
+                :range-label="rangeLabel"
+                :current-page="currentPage"
+                :total-pages="totalPages"
+                :scroll-to-top-on-change="true"
+                :scroll-top-offset="0"
+                @update:current-page="goToPage"
+              />
+            </template>
           </AdminTableShell>
         </section>
 
@@ -283,7 +291,8 @@
               >
                 <span>Mức tồn kho</span>
                 <span class="text-[var(--primary)]"
-                  >{{ selectedBook.quantity }} quyển</span
+                  >{{ selectedBook.remainingCopies }} /
+                  {{ selectedBook.totalCopies }} quyển</span
                 >
               </div>
               <div
@@ -378,6 +387,22 @@
     </main>
 
     <div
+      v-if="noticeMessage"
+      class="pointer-events-none fixed right-4 top-4 z-[95] w-full max-w-sm"
+    >
+      <div
+        class="rounded-xl border px-4 py-3 text-sm shadow-xl"
+        :class="
+          noticeType === 'success'
+            ? 'border-[rgb(83_99_79/25%)] bg-[rgb(214_232_207/96%)] text-[var(--on-primary-container)]'
+            : 'border-[rgb(165_71_49/32%)] bg-[rgb(254_139_112/96%)] text-[var(--on-error-container)]'
+        "
+      >
+        {{ noticeMessage }}
+      </div>
+    </div>
+
+    <div
       v-if="showCreateModal"
       class="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/45 px-4 py-6"
     >
@@ -410,7 +435,8 @@
               @change="handleCoverFileChange"
             />
             <p class="text-xs text-[var(--on-surface-variant)]">
-              Chấp nhận ảnh JPG/PNG/WebP, tối đa 5MB.
+              Chấp nhận ảnh JPG/PNG/WebP, tối đa 5MB. Ảnh sẽ được cắt theo khung
+              bìa trước khi lưu.
             </p>
             <div v-if="coverPreview || newBook.ANHBIA_URL" class="pt-2">
               <img
@@ -591,6 +617,55 @@
     </div>
 
     <div
+      v-if="showCoverCropModal"
+      class="fixed inset-0 z-[85] flex items-center justify-center bg-black/60 px-4"
+    >
+      <div
+        class="w-full max-w-3xl rounded-2xl bg-[var(--surface-container-lowest)] p-5 shadow-2xl"
+      >
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-xl">Cắt ảnh bìa sách</h3>
+          <button
+            type="button"
+            class="rounded-lg p-1.5 transition hover:bg-[var(--surface-container-highest)]"
+            @click="closeCoverCropModal"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div
+          class="relative mx-auto aspect-[2/3] w-full max-w-[420px] overflow-hidden rounded-xl bg-[var(--surface-container-low)]"
+        >
+          <img
+            ref="coverCropImageRef"
+            :src="coverCropSource"
+            alt="Cắt ảnh bìa"
+            class="block max-w-full"
+            @load="initCoverCropper"
+          />
+        </div>
+
+        <div class="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            class="btn-secondary px-4 py-2 text-xs"
+            @click="closeCoverCropModal"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            class="btn-primary px-4 py-2 text-xs"
+            @click="applyCoverCrop"
+          >
+            Dùng ảnh này
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div
       v-if="showMetaCreateModal"
       class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 px-4"
     >
@@ -706,7 +781,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import Cropper from "cropperjs";
+import "cropperjs/dist/cropper.css";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import AdminSidebar from "../components/admin/AdminSidebar.vue";
 import AdminDetailAside from "../components/admin/shared/AdminDetailAside.vue";
 import AdminFilterBar from "../components/admin/shared/AdminFilterBar.vue";
@@ -714,6 +798,7 @@ import AdminPageHero from "../components/admin/shared/AdminPageHero.vue";
 import AdminTableShell from "../components/admin/shared/AdminTableShell.vue";
 import AdminTopHeader from "../components/admin/shared/AdminTopHeader.vue";
 import FeedbackAlert from "../components/admin/shared/FeedbackAlert.vue";
+import PaginationBar from "../components/shared/PaginationBar.vue";
 import StatusChip from "../components/admin/shared/StatusChip.vue";
 import api from "../api/axios";
 
@@ -728,6 +813,8 @@ const categoryFilter = ref("ALL");
 const stockFilter = ref("ALL");
 const books = ref([]);
 const selectedBook = ref(null);
+const pageSize = 15;
+const currentPage = ref(1);
 const showCreateModal = ref(false);
 const newBook = ref(getEmptyBookForm());
 const modalMode = ref("create");
@@ -742,6 +829,27 @@ const isCreatingMeta = ref(false);
 const metaCreateType = ref("author");
 const metaForm = ref(getEmptyMetaForm("author"));
 const metaNextPublisherCode = ref("");
+const borrowedCountByBook = ref(new Map());
+const showCoverCropModal = ref(false);
+const coverCropImageRef = ref(null);
+const coverCropSource = ref("");
+let coverCropperInstance = null;
+const noticeMessage = ref("");
+const noticeType = ref("success");
+let noticeTimer = null;
+
+function showNotice(message, type = "success") {
+  noticeMessage.value = String(message || "").trim();
+  noticeType.value = type;
+
+  if (noticeTimer) {
+    window.clearTimeout(noticeTimer);
+  }
+
+  noticeTimer = window.setTimeout(() => {
+    noticeMessage.value = "";
+  }, 3500);
+}
 
 function getEmptyMetaForm(type) {
   if (type === "author") {
@@ -848,7 +956,29 @@ const filteredBooks = computed(() => {
   });
 });
 
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredBooks.value.length / pageSize)),
+);
+
+const paginatedBooks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredBooks.value.slice(start, start + pageSize);
+});
+
+const rangeLabel = computed(() => {
+  const total = filteredBooks.value.length;
+  if (!total) return "0 - 0 trên 0 bản ghi";
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(start + pageSize - 1, total);
+  return `${start} - ${end} trên ${total} bản ghi`;
+});
+
 watch(filteredBooks, (rows) => {
+  const maxPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+
   if (!rows.length) {
     selectedBook.value = null;
     return;
@@ -865,8 +995,19 @@ watch(filteredBooks, (rows) => {
   }
 });
 
-function getStockMeta(quantity) {
-  if (quantity <= 0) {
+watch([searchText, categoryFilter, stockFilter], () => {
+  currentPage.value = 1;
+});
+
+function goToPage(page) {
+  const pageNumber = Number(page);
+  if (!Number.isInteger(pageNumber)) return;
+  if (pageNumber < 1 || pageNumber > totalPages.value) return;
+  currentPage.value = pageNumber;
+}
+
+function getStockMeta(remainingCopies, totalCopies) {
+  if (remainingCopies <= 0) {
     return {
       stockKey: "OUT_STOCK",
       stockLabel: "Hết sách",
@@ -875,13 +1016,15 @@ function getStockMeta(quantity) {
     };
   }
 
-  if (quantity <= 3) {
+  const ratio = totalCopies > 0 ? remainingCopies / totalCopies : 0;
+
+  if (remainingCopies <= 3 || ratio <= 0.2) {
     return {
       stockKey: "LOW_STOCK",
       stockLabel: "Sắp hết",
       stockClass:
         "bg-[var(--surface-container-highest)] text-[var(--on-primary-fixed-variant)]",
-      stockPercent: Math.min(100, quantity * 15),
+      stockPercent: Math.max(0, Math.min(100, Math.round(ratio * 100))),
     };
   }
 
@@ -889,7 +1032,7 @@ function getStockMeta(quantity) {
     stockKey: "IN_STOCK",
     stockLabel: "Còn sách",
     stockClass: "status-chip-active",
-    stockPercent: Math.min(100, quantity * 8),
+    stockPercent: Math.max(0, Math.min(100, Math.round(ratio * 100))),
   };
 }
 
@@ -926,7 +1069,18 @@ function mapBook(item) {
       : categories.map(
           (code) => genreByCode.get(String(code).toUpperCase()) || code,
         );
+  const baseRemainingCopies = Number(item.SOQUYEN || 0);
+  const borrowedCopies = Number(
+    borrowedCountByBook.value.get(String(item.MASACH || "")) || 0,
+  );
+  const inferredTotalCopies = Math.max(
+    Number(item.TONGSOQUYEN || 0),
+    baseRemainingCopies + borrowedCopies,
+    baseRemainingCopies,
+  );
   const isDeleted = item.TRANGTHAI === "DELETED";
+  const remainingCopies = isDeleted ? 0 : baseRemainingCopies;
+  const totalCopies = isDeleted ? 0 : inferredTotalCopies;
   const stockMeta = isDeleted
     ? {
         stockKey: "DELETED",
@@ -935,7 +1089,7 @@ function mapBook(item) {
           "bg-[rgb(156_163_175/25%)] text-[rgb(75_85_99)] border border-[rgb(156_163_175/35%)]",
         stockPercent: 0,
       }
-    : getStockMeta(item.SOQUYEN || 0);
+    : getStockMeta(remainingCopies, totalCopies);
 
   return {
     id: item._id,
@@ -946,10 +1100,14 @@ function mapBook(item) {
       ? categoryLabels.join(", ")
       : "Chưa phân loại",
     publishedYear: item.NAMXUATBAN || "---",
-    quantity: item.SOQUYEN || 0,
+    quantity: remainingCopies,
+    totalCopies,
+    remainingCopies,
+    borrowedCopies,
     price: item.DONGIA || 0,
     priceLabel: `${(item.DONGIA || 0).toLocaleString("vi-VN")} VND`,
-    publisher: item.MANXB || "---",
+    publisher: item.MANXB_TEN || item.MANXB || "---",
+    publisherCode: item.MANXB || "",
     description: item.MOTA_NGAN || "Chưa có mô tả ngắn cho đầu sách này.",
     coverUrl: item.ANHBIA_URL || "",
     coverPublicId: item.ANHBIA_PUBLIC_ID || "",
@@ -980,6 +1138,18 @@ async function fetchBooks() {
   errorMessage.value = "";
 
   try {
+    const borrowResponse = await api.get(
+      "/borrows?status=APPROVED,BORROWING,OVERDUE",
+    );
+    const borrowItems = borrowResponse.data?.items || [];
+    const groupedBorrowed = new Map();
+    borrowItems.forEach((borrow) => {
+      const key = String(borrow?.MASACH || "").trim();
+      if (!key) return;
+      groupedBorrowed.set(key, (groupedBorrowed.get(key) || 0) + 1);
+    });
+    borrowedCountByBook.value = groupedBorrowed;
+
     const queryParams = new URLSearchParams({ includeDeleted: "true" });
     if (searchText.value) {
       queryParams.set("tensach", searchText.value);
@@ -1118,9 +1288,9 @@ function openEditModal(book) {
     MASACH: book.code,
     TENSACH: book.title,
     TACGIA: [...book.authors],
-    MANXB: book.publisher,
+    MANXB: book.publisherCode,
     DONGIA: book.price,
-    SOQUYEN: book.quantity,
+    SOQUYEN: book.remainingCopies,
     NAMXUATBAN: book.publishedYear === "---" ? "" : book.publishedYear,
     THELOAI: [...book.categories],
     MOTA_NGAN:
@@ -1153,8 +1323,78 @@ function handleCoverFileChange(event) {
     return;
   }
 
-  coverFile.value = file;
-  coverPreview.value = URL.createObjectURL(file);
+  if (coverCropSource.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(coverCropSource.value);
+  }
+  coverCropSource.value = URL.createObjectURL(file);
+  showCoverCropModal.value = true;
+}
+
+function destroyCoverCropper() {
+  if (!coverCropperInstance) return;
+  coverCropperInstance.destroy();
+  coverCropperInstance = null;
+}
+
+function initCoverCropper() {
+  if (!showCoverCropModal.value || !coverCropImageRef.value) return;
+
+  destroyCoverCropper();
+  coverCropperInstance = new Cropper(coverCropImageRef.value, {
+    aspectRatio: 2 / 3,
+    viewMode: 1,
+    autoCropArea: 0.9,
+    dragMode: "move",
+    responsive: true,
+    background: false,
+    guides: true,
+    center: true,
+    highlight: false,
+    movable: true,
+    zoomable: true,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    scalable: false,
+    rotatable: false,
+  });
+}
+
+function closeCoverCropModal() {
+  showCoverCropModal.value = false;
+  destroyCoverCropper();
+  if (coverCropSource.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(coverCropSource.value);
+  }
+  coverCropSource.value = "";
+}
+
+async function applyCoverCrop() {
+  if (!coverCropperInstance) return;
+
+  const canvas = coverCropperInstance.getCroppedCanvas({
+    width: 600,
+    height: 900,
+    imageSmoothingQuality: "high",
+  });
+  if (!canvas) return;
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.9);
+  });
+  if (!blob) {
+    errorMessage.value = "Không thể xử lý ảnh bìa đã cắt";
+    return;
+  }
+
+  coverFile.value = new File([blob], `cover-${Date.now()}.jpg`, {
+    type: "image/jpeg",
+  });
+
+  if (coverPreview.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(coverPreview.value);
+  }
+  coverPreview.value = URL.createObjectURL(blob);
+  closeCoverCropModal();
 }
 
 async function uploadCoverIfNeeded() {
@@ -1216,15 +1456,18 @@ async function handleSubmitBook() {
     if (modalMode.value === "edit") {
       await api.put(`/books/${newBook.value.id}`, payload);
       successMessage.value = "Cập nhật sách thành công";
+      showNotice(successMessage.value, "success");
     } else {
       await api.post("/books", payload);
       successMessage.value = "Tạo sách mới thành công";
+      showNotice(successMessage.value, "success");
     }
 
     closeCreateModal();
     await fetchBooks();
   } catch (error) {
     errorMessage.value = normalizeError(error);
+    showNotice(errorMessage.value, "error");
   } finally {
     isCreating.value = false;
   }
@@ -1255,5 +1498,23 @@ async function handleDeleteBook(book) {
 
 onMounted(async () => {
   await Promise.all([fetchBooks(), fetchMetadata()]);
+});
+
+watch(showCoverCropModal, async (isOpen) => {
+  if (!isOpen) return;
+  await nextTick();
+  if (coverCropImageRef.value?.complete) {
+    initCoverCropper();
+  }
+});
+
+onBeforeUnmount(() => {
+  destroyCoverCropper();
+  if (coverCropSource.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(coverCropSource.value);
+  }
+  if (coverPreview.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(coverPreview.value);
+  }
 });
 </script>

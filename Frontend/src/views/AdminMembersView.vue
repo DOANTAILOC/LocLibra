@@ -129,7 +129,7 @@
             </template>
             <template #rows>
               <tr
-                v-for="member in filteredMembers"
+                v-for="member in paginatedMembers"
                 :key="member.id"
                 class="group cursor-pointer border-l-4 transition-colors"
                 :class="
@@ -217,6 +217,16 @@
                   </div>
                 </td>
               </tr>
+            </template>
+            <template #footer>
+              <PaginationBar
+                :range-label="rangeLabel"
+                :current-page="currentPage"
+                :total-pages="totalPages"
+                :scroll-to-top-on-change="true"
+                :scroll-top-offset="0"
+                @update:current-page="goToPage"
+              />
             </template>
           </AdminTableShell>
         </section>
@@ -346,6 +356,7 @@ import AdminPageHero from "../components/admin/shared/AdminPageHero.vue";
 import AdminTableShell from "../components/admin/shared/AdminTableShell.vue";
 import AdminTopHeader from "../components/admin/shared/AdminTopHeader.vue";
 import FeedbackAlert from "../components/admin/shared/FeedbackAlert.vue";
+import PaginationBar from "../components/shared/PaginationBar.vue";
 import StatusChip from "../components/admin/shared/StatusChip.vue";
 import api from "../api/axios";
 
@@ -356,6 +367,8 @@ const searchText = ref("");
 const statusFilter = ref("ALL");
 const members = ref([]);
 const selectedMember = ref(null);
+const pageSize = 15;
+const currentPage = ref(1);
 
 const filteredMembers = computed(() => {
   const keyword = searchText.value.toLowerCase();
@@ -374,7 +387,29 @@ const filteredMembers = computed(() => {
   });
 });
 
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredMembers.value.length / pageSize)),
+);
+
+const paginatedMembers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredMembers.value.slice(start, start + pageSize);
+});
+
+const rangeLabel = computed(() => {
+  const total = filteredMembers.value.length;
+  if (!total) return "0 - 0 trên 0 bản ghi";
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(start + pageSize - 1, total);
+  return `${start} - ${end} trên ${total} bản ghi`;
+});
+
 watch(filteredMembers, (rows) => {
+  const maxPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+
   if (!rows.length) {
     selectedMember.value = null;
     return;
@@ -390,6 +425,17 @@ watch(filteredMembers, (rows) => {
     selectedMember.value = rows[0];
   }
 });
+
+watch([searchText, statusFilter], () => {
+  currentPage.value = 1;
+});
+
+function goToPage(page) {
+  const pageNumber = Number(page);
+  if (!Number.isInteger(pageNumber)) return;
+  if (pageNumber < 1 || pageNumber > totalPages.value) return;
+  currentPage.value = pageNumber;
+}
 
 function formatDate(dateValue) {
   if (!dateValue) return "---";

@@ -115,7 +115,7 @@
     <section v-else class="grid grid-cols-1 gap-6 xl:grid-cols-[1.45fr_1fr]">
       <div class="space-y-3">
         <article
-          v-for="borrow in filteredBorrows"
+          v-for="borrow in paginatedBorrows"
           :key="borrow.id"
           class="cursor-pointer rounded-xl border p-4 transition"
           :class="
@@ -187,6 +187,18 @@
             </div>
           </div>
         </article>
+
+        <PaginationBar
+          v-if="totalPages > 1"
+          class="mt-2"
+          :range-label="pageRangeLabel"
+          :current-page="currentPage"
+          :total-pages="totalPages"
+          :boxed="true"
+          :scroll-to-top-on-change="true"
+          :scroll-top-offset="0"
+          @update:current-page="goToPage"
+        />
       </div>
 
       <aside class="panel-surface h-fit p-5">
@@ -307,6 +319,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import api from "../api/axios";
+import PaginationBar from "../components/shared/PaginationBar.vue";
 
 const loading = ref(false);
 const isExtending = ref(false);
@@ -316,6 +329,8 @@ const searchText = ref("");
 const selectedStatus = ref("ALL");
 const borrows = ref([]);
 const selectedBorrowId = ref("");
+const pageSize = 10;
+const currentPage = ref(1);
 
 const fallbackStatuses = [
   "PENDING",
@@ -407,6 +422,23 @@ const filteredBorrows = computed(() => {
   });
 });
 
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredBorrows.value.length / pageSize)),
+);
+
+const paginatedBorrows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredBorrows.value.slice(start, start + pageSize);
+});
+
+const pageRangeLabel = computed(() => {
+  const total = filteredBorrows.value.length;
+  if (!total) return "0 - 0 trên 0 phiếu mượn";
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(start + pageSize - 1, total);
+  return `${start} - ${end} trên ${total} phiếu mượn`;
+});
+
 const selectedBorrow = computed(() => {
   if (!filteredBorrows.value.length) return null;
 
@@ -435,6 +467,11 @@ const statCards = computed(() => {
 });
 
 watch(filteredBorrows, (list) => {
+  const maxPage = Math.max(1, Math.ceil(list.length / pageSize));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+
   if (!list.length) {
     selectedBorrowId.value = "";
     return;
@@ -445,6 +482,17 @@ watch(filteredBorrows, (list) => {
     selectedBorrowId.value = list[0].id;
   }
 });
+
+watch([searchText, selectedStatus], () => {
+  currentPage.value = 1;
+});
+
+function goToPage(page) {
+  const pageNumber = Number(page);
+  if (!Number.isInteger(pageNumber)) return;
+  if (pageNumber < 1 || pageNumber > totalPages.value) return;
+  currentPage.value = pageNumber;
+}
 
 const extensionButtonLabel = computed(() => {
   if (isExtending.value) return "Đang gửi yêu cầu...";

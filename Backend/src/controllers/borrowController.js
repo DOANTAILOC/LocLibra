@@ -44,6 +44,73 @@ const getStaffFromAccount = async (req) => {
   return Staff.findById(req.account.staffId);
 };
 
+const releaseReservedStockForBorrows = async (borrows) => {
+  if (!Array.isArray(borrows) || !borrows.length) return;
+
+  const releaseByBook = borrows.reduce((acc, item) => {
+    const code = String(item?.MASACH || "").trim();
+    if (!code) return acc;
+    acc.set(code, (acc.get(code) || 0) + 1);
+    return acc;
+  }, new Map());
+
+  if (!releaseByBook.size) return;
+
+  await Promise.all(
+    [...releaseByBook.entries()].map(([masach, amount]) =>
+      Book.updateOne(
+        { MASACH: masach, TRANGTHAI: { $ne: "DELETED" } },
+        { $inc: { SOQUYEN: amount } },
+      ),
+    ),
+  );
+};
+
+const cancelExpiredApprovedBorrows = async ({ madocgia } = {}) => {
+  const now = new Date();
+  const filter = {
+    TRANGTHAI: "APPROVED",
+    NGAYHENLAY: { $lt: now },
+  };
+
+  if (madocgia) {
+    filter.MADOCGIA = madocgia;
+  }
+
+  const expiredBorrows = await Borrow.find(filter).select("_id MASACH").lean();
+  if (!expiredBorrows.length) {
+    return { cancelledCount: 0 };
+  }
+
+  const transitionedBorrows = [];
+
+  await Promise.all(
+    expiredBorrows.map(async (item) => {
+      const updatedBorrow = await Borrow.findOneAndUpdate(
+        {
+          _id: item._id,
+          TRANGTHAI: "APPROVED",
+          NGAYHENLAY: { $lt: now },
+        },
+        {
+          $set: {
+            TRANGTHAI: "CANCELLED",
+            LYDOTUCHOI: "Quá hạn nhận sách",
+          },
+        },
+      );
+
+      if (updatedBorrow) {
+        transitionedBorrows.push(item);
+      }
+    }),
+  );
+
+  await releaseReservedStockForBorrows(transitionedBorrows);
+
+  return { cancelledCount: transitionedBorrows.length };
+};
+
 const syncOverdueForReader = async (madocgia) => {
   return Borrow.updateMany(
     {
@@ -53,6 +120,14 @@ const syncOverdueForReader = async (madocgia) => {
     },
     { $set: { TRANGTHAI: "OVERDUE" } },
   );
+};
+
+const syncExpiredPickupForReader = async (madocgia) => {
+  return cancelExpiredApprovedBorrows({ madocgia });
+};
+
+const syncExpiredPickup = async () => {
+  return cancelExpiredApprovedBorrows();
 };
 
 const createBorrowRequest = async (req, res) => {
@@ -76,6 +151,7 @@ const createBorrowRequest = async (req, res) => {
     }
 
     await syncOverdueForReader(reader.MADOCGIA);
+    await syncExpiredPickupForReader(reader.MADOCGIA);
 
     const hasOverdue = await Borrow.exists({
       MADOCGIA: reader.MADOCGIA,
@@ -171,11 +247,33 @@ const approveBorrowRequest = async (req, res) => {
       return res.status(400).json({ message: "Sách không còn sẵn để duyệt" });
     }
 
-    borrow.TRANGTHAI = "APPROVED";
-    borrow.MSNV = staff.MSNV;
-    borrow.NGAYDUYET = new Date();
-    borrow.NGAYHENLAY = addDays(new Date(), DEFAULT_PICKUP_DEADLINE_DAYS);
-    await borrow.save();
+    const reservedBook = await Book.findOneAndUpdate(
+      {
+        MASACH: borrow.MASACH,
+        TRANGTHAI: { $ne: "DELETED" },
+        SOQUYEN: { $gt: 0 },
+      },
+      { $inc: { SOQUYEN: -1 } },
+      { new: true },
+    );
+
+    if (!reservedBook) {
+      return res.status(400).json({ message: "Sách không còn sẵn để duyệt" });
+    }
+
+    try {
+      borrow.TRANGTHAI = "APPROVED";
+      borrow.MSNV = staff.MSNV;
+      borrow.NGAYDUYET = new Date();
+      borrow.NGAYHENLAY = addDays(new Date(), DEFAULT_PICKUP_DEADLINE_DAYS);
+      await borrow.save();
+    } catch (saveError) {
+      await Book.updateOne(
+        { MASACH: borrow.MASACH, TRANGTHAI: { $ne: "DELETED" } },
+        { $inc: { SOQUYEN: 1 } },
+      );
+      throw saveError;
+    }
 
     return res
       .status(200)
@@ -247,23 +345,17 @@ const handOverBook = async (req, res) => {
       borrow.TRANGTHAI = "CANCELLED";
       borrow.LYDOTUCHOI = "Quá hạn nhận sách";
       await borrow.save();
-      return res
-        .status(400)
-        .json({ message: "Phiếu đã quá hạn nhận sách và bị hủy" });
-    }
 
-    const updatedBook = await Book.findOneAndUpdate(
-      {
-        MASACH: borrow.MASACH,
-        TRANGTHAI: { $ne: "DELETED" },
-        SOQUYEN: { $gt: 0 },
-      },
-      { $inc: { SOQUYEN: -1 } },
-      { new: true },
-    );
+      await Book.updateOne(
+        { MASACH: borrow.MASACH, TRANGTHAI: { $ne: "DELETED" } },
+        { $inc: { SOQUYEN: 1 } },
+      );
 
-    if (!updatedBook) {
-      return res.status(400).json({ message: "Sách đã hết, không thể giao" });
+      return res.status(200).json({
+        message: "Phiếu đã quá hạn nhận sách và bị hủy",
+        borrow,
+        autoCancelled: true,
+      });
     }
 
     const now = new Date();
@@ -653,6 +745,7 @@ const getMyBorrowRequests = async (req, res) => {
       return res.status(403).json({ message: "Tài khoản không phải độc giả" });
     }
 
+    await syncExpiredPickupForReader(reader.MADOCGIA);
     await syncOverdueForReader(reader.MADOCGIA);
 
     const borrows = await Borrow.find({ MADOCGIA: reader.MADOCGIA }).sort({
@@ -698,6 +791,8 @@ const getMyBorrowRequests = async (req, res) => {
 
 const getBorrows = async (req, res) => {
   try {
+    await syncExpiredPickup();
+
     await Borrow.updateMany(
       {
         TRANGTHAI: "BORROWING",
@@ -743,7 +838,7 @@ const getBorrows = async (req, res) => {
         .select("MADOCGIA HOLOT TEN")
         .lean(),
       Book.find({ MASACH: { $in: bookIds }, TRANGTHAI: { $ne: "DELETED" } })
-        .select("MASACH TENSACH")
+        .select("MASACH TENSACH TACGIA ANHBIA_URL")
         .lean(),
     ]);
 
@@ -768,6 +863,8 @@ const getBorrows = async (req, res) => {
         SACH: {
           MASACH: borrow.MASACH,
           TENSACH: book?.TENSACH || null,
+          TACGIA: Array.isArray(book?.TACGIA) ? book.TACGIA : [],
+          ANHBIA_URL: book?.ANHBIA_URL || "",
         },
       };
     });
@@ -787,6 +884,8 @@ const getBorrows = async (req, res) => {
 
 const getPendingRequests = async (req, res) => {
   try {
+    await syncExpiredPickup();
+
     const borrows = await Borrow.find({ TRANGTHAI: "PENDING" }).sort({
       NGAYYEUCAU: -1,
     });
@@ -801,6 +900,8 @@ const getPendingRequests = async (req, res) => {
 
 const getActiveBorrows = async (req, res) => {
   try {
+    await syncExpiredPickup();
+
     const borrows = await Borrow.find({
       TRANGTHAI: { $in: ["APPROVED", "BORROWING", "OVERDUE"] },
     }).sort({ created_at: -1 });
@@ -815,6 +916,8 @@ const getActiveBorrows = async (req, res) => {
 
 const getOverdueBorrows = async (req, res) => {
   try {
+    await syncExpiredPickup();
+
     await Borrow.updateMany(
       {
         TRANGTHAI: "BORROWING",
@@ -836,6 +939,8 @@ const getOverdueBorrows = async (req, res) => {
 
 const syncOverdue = async (req, res) => {
   try {
+    await syncExpiredPickup();
+
     const result = await Borrow.updateMany(
       {
         TRANGTHAI: "BORROWING",

@@ -91,7 +91,7 @@
 
             <template #rows>
               <tr
-                v-for="item in filteredEntities"
+                v-for="item in paginatedEntities"
                 :key="item._id"
                 class="group cursor-pointer border-l-4 transition-colors"
                 :class="
@@ -134,6 +134,16 @@
                   </div>
                 </td>
               </tr>
+            </template>
+            <template #footer>
+              <PaginationBar
+                :range-label="rangeLabel"
+                :current-page="currentPage"
+                :total-pages="totalPages"
+                :scroll-to-top-on-change="true"
+                :scroll-top-offset="0"
+                @update:current-page="goToPage"
+              />
             </template>
           </AdminTableShell>
         </section>
@@ -270,6 +280,7 @@ import AdminPageHero from "./shared/AdminPageHero.vue";
 import AdminTableShell from "./shared/AdminTableShell.vue";
 import AdminTopHeader from "./shared/AdminTopHeader.vue";
 import FeedbackAlert from "./shared/FeedbackAlert.vue";
+import PaginationBar from "../shared/PaginationBar.vue";
 
 const props = defineProps({
   title: { type: String, required: true },
@@ -301,6 +312,8 @@ const successMessage = ref("");
 const searchText = ref("");
 const entities = ref([]);
 const selectedEntity = ref(null);
+const pageSize = 15;
+const currentPage = ref(1);
 const showModal = ref(false);
 const mode = ref("create");
 const formData = ref({});
@@ -324,7 +337,29 @@ const filteredEntities = computed(() => {
   });
 });
 
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredEntities.value.length / pageSize)),
+);
+
+const paginatedEntities = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredEntities.value.slice(start, start + pageSize);
+});
+
+const rangeLabel = computed(() => {
+  const total = filteredEntities.value.length;
+  if (!total) return "0 - 0 trên 0 bản ghi";
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(start + pageSize - 1, total);
+  return `${start} - ${end} trên ${total} bản ghi`;
+});
+
 watch(filteredEntities, (rows) => {
+  const maxPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+
   if (!rows.length) {
     selectedEntity.value = null;
     return;
@@ -342,6 +377,17 @@ watch(filteredEntities, (rows) => {
     selectedEntity.value = rows[0];
   }
 });
+
+watch(searchText, () => {
+  currentPage.value = 1;
+});
+
+const goToPage = (page) => {
+  const pageNumber = Number(page);
+  if (!Number.isInteger(pageNumber)) return;
+  if (pageNumber < 1 || pageNumber > totalPages.value) return;
+  currentPage.value = pageNumber;
+};
 
 const resetFormData = () => {
   const payload = {};

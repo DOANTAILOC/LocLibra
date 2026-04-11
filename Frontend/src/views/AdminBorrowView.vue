@@ -141,7 +141,7 @@
             </template>
             <template #rows>
               <tr
-                v-for="loan in filteredRows"
+                v-for="loan in paginatedRows"
                 :key="loan.id"
                 class="group cursor-pointer border-l-4 transition-colors"
                 :class="
@@ -164,14 +164,11 @@
                   </p>
                 </td>
                 <td class="px-4 py-4 text-center">
-                  <span class="text-sm font-bold text-[var(--primary)]">{{
-                    1
-                  }}</span>
-                  <p
-                    class="text-[9px] font-bold tracking-wider text-[var(--on-surface-variant)] uppercase"
-                  >
-                    Đầu sách
-                  </p>
+                  <img
+                    :src="loan.bookCover || resolveBookCover(loan)"
+                    :alt="loan.bookTitle"
+                    class="mx-auto h-16 w-11 rounded object-cover ring-1 ring-[rgb(184_188_163/35%)]"
+                  />
                 </td>
                 <td class="px-4 py-4">
                   <p class="text-xs font-semibold">{{ loan.borrowedAt }}</p>
@@ -224,43 +221,16 @@
               <p
                 class="text-[11px] font-bold tracking-tight text-[var(--on-surface-variant)] uppercase"
               >
-                1 - 4 trên 1,245 phiếu mượn
-              </p>
-              <p
-                class="text-[11px] font-bold tracking-tight text-[var(--on-surface-variant)] uppercase"
-              >
                 Tổng: {{ filteredRows.length }} bản ghi
               </p>
-              <div class="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  class="rounded-md p-1 text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-highest)]"
-                >
-                  <span class="material-symbols-outlined text-sm"
-                    >chevron_left</span
-                  >
-                </button>
-                <button
-                  type="button"
-                  class="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--primary)] text-xs font-bold text-[var(--on-primary)]"
-                >
-                  1
-                </button>
-                <button
-                  type="button"
-                  class="flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-highest)]"
-                >
-                  2
-                </button>
-                <button
-                  type="button"
-                  class="rounded-md p-1 text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-highest)]"
-                >
-                  <span class="material-symbols-outlined text-sm"
-                    >chevron_right</span
-                  >
-                </button>
-              </div>
+              <PaginationBar
+                :range-label="rangeLabel"
+                :current-page="currentPage"
+                :total-pages="totalPages"
+                :scroll-to-top-on-change="true"
+                :scroll-top-offset="0"
+                @update:current-page="goToPage"
+              />
             </template>
           </AdminTableShell>
         </section>
@@ -446,6 +416,7 @@ import AdminPageHero from "../components/admin/shared/AdminPageHero.vue";
 import AdminTableShell from "../components/admin/shared/AdminTableShell.vue";
 import AdminTopHeader from "../components/admin/shared/AdminTopHeader.vue";
 import FeedbackAlert from "../components/admin/shared/FeedbackAlert.vue";
+import PaginationBar from "../components/shared/PaginationBar.vue";
 import StatusChip from "../components/admin/shared/StatusChip.vue";
 import api from "../api/axios";
 
@@ -458,6 +429,8 @@ const searchText = ref("");
 const selectedStatus = ref("ALL");
 const rawBorrows = ref([]);
 const selectedLoan = ref(null);
+const pageSize = 10;
+const currentPage = ref(1);
 
 const statusLabelMap = {
   PENDING: "Chờ duyệt",
@@ -498,6 +471,23 @@ const filteredRows = computed(() => {
   });
 });
 
+const totalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredRows.value.length / pageSize)),
+);
+
+const paginatedRows = computed(() => {
+  const start = (currentPage.value - 1) * pageSize;
+  return filteredRows.value.slice(start, start + pageSize);
+});
+
+const rangeLabel = computed(() => {
+  const total = filteredRows.value.length;
+  if (!total) return "0 - 0 trên 0 phiếu mượn";
+  const start = (currentPage.value - 1) * pageSize + 1;
+  const end = Math.min(start + pageSize - 1, total);
+  return `${start} - ${end} trên ${total} phiếu mượn`;
+});
+
 const nextAction = computed(() => {
   const status = selectedLoan.value?.status;
   if (status === "PENDING") return "approve";
@@ -532,6 +522,11 @@ const canRejectExtension = computed(
 );
 
 watch(filteredRows, (rows) => {
+  const maxPage = Math.max(1, Math.ceil(rows.length / pageSize));
+  if (currentPage.value > maxPage) {
+    currentPage.value = maxPage;
+  }
+
   if (!rows.length) {
     selectedLoan.value = null;
     return;
@@ -548,6 +543,17 @@ watch(filteredRows, (rows) => {
   }
 });
 
+watch([searchText, selectedStatus], () => {
+  currentPage.value = 1;
+});
+
+function goToPage(page) {
+  const pageNumber = Number(page);
+  if (!Number.isInteger(pageNumber)) return;
+  if (pageNumber < 1 || pageNumber > totalPages.value) return;
+  currentPage.value = pageNumber;
+}
+
 function formatDate(dateValue) {
   if (!dateValue) return "---";
   const date = new Date(dateValue);
@@ -558,6 +564,12 @@ function formatDate(dateValue) {
 function formatBorrowItem(item) {
   const displayStatus =
     item.TRANGTHAI_GIA_HAN === "PENDING" ? "EXTENSION_PENDING" : item.TRANGTHAI;
+  const bookTitle = item.SACH?.TENSACH || "Chưa có tên sách";
+  const bookCode = item.MASACH || item.SACH?.MASACH || "---";
+  const authors = Array.isArray(item.SACH?.TACGIA)
+    ? item.SACH.TACGIA.filter(Boolean)
+    : [];
+  const bookAuthor = authors.length ? authors.join(", ") : "";
 
   return {
     id: item._id,
@@ -565,8 +577,10 @@ function formatBorrowItem(item) {
     createdAt: `Tạo: ${formatDate(item.NGAYYEUCAU || item.created_at)}`,
     memberName: item.DOCGIA?.HOTEN || "Không rõ độc giả",
     memberId: item.MADOCGIA || item.DOCGIA?.MADOCGIA || "---",
-    bookCode: item.MASACH || item.SACH?.MASACH || "---",
-    bookTitle: item.SACH?.TENSACH || "Chưa có tên sách",
+    bookCode,
+    bookTitle,
+    bookAuthor,
+    bookCover: item.SACH?.ANHBIA_URL || "",
     borrowedAt: formatDate(item.NGAYMUON || item.NGAYYEUCAU),
     dueAt: formatDate(item.NGAYHENTRA),
     status: item.TRANGTHAI,
@@ -581,7 +595,7 @@ function formatBorrowItem(item) {
     extensionRequestStatus: item.TRANGTHAI_GIA_HAN || "NONE",
     books: [
       {
-        title: item.SACH?.TENSACH || item.MASACH || "Chưa có tên sách",
+        title: bookTitle,
         note:
           item.TRANGTHAI_GIA_HAN === "PENDING"
             ? "Có yêu cầu gia hạn đang chờ duyệt"
@@ -599,6 +613,11 @@ function formatBorrowItem(item) {
       },
     ],
   };
+}
+
+function resolveBookCover(loan) {
+  const seed = encodeURIComponent(loan?.bookCode || loan?.bookTitle || "book");
+  return `https://picsum.photos/seed/${seed}/120/180`;
 }
 
 function normalizeError(error) {
