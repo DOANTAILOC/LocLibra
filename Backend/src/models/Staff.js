@@ -26,6 +26,16 @@ const StaffSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    AVATAR_URL: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    AVATAR_PUBLIC_ID: {
+      type: String,
+      trim: true,
+      default: "",
+    },
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },

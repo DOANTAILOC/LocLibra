@@ -14,6 +14,7 @@ import AdminAuthorsView from "../views/AdminAuthorsView.vue";
 import AdminGenresView from "../views/AdminGenresView.vue";
 import AdminStaffsView from "../views/AdminStaffsView.vue";
 import AdminPublishersView from "../views/AdminPublishersView.vue";
+import StaffProfileView from "../views/StaffProfileView.vue";
 
 const routes = [
   { path: "/", component: HomeView },
@@ -30,42 +31,47 @@ const routes = [
   {
     path: "/admin",
     component: AdminDashboardView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/borrows",
     component: AdminBorrowView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/members",
     component: AdminMembersView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/books",
     component: AdminBooksView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/authors",
     component: AdminAuthorsView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/genres",
     component: AdminGenresView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/staffs",
     component: AdminStaffsView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
   {
     path: "/admin/publishers",
     component: AdminPublishersView,
-    meta: { requiresAuth: true, requiresAdmin: true },
+    meta: { requiresAuth: true, requiresStaffPanel: true },
+  },
+  {
+    path: "/admin/profile",
+    component: StaffProfileView,
+    meta: { requiresAuth: true, requiresStaffPanel: true },
   },
 ];
 
@@ -77,14 +83,14 @@ const router = createRouter({
 router.beforeEach((to) => {
   const isLoggedIn = !!localStorage.getItem("token");
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
-  const isAdmin = ["staff", "admin"].includes(storedUser?.role);
+  const isStaffPanel = ["staff", "admin"].includes(storedUser?.role);
 
   if (to.meta.requiresAuth && !isLoggedIn) {
     window.alert("Vui lòng đăng nhập để tiếp tục.");
     return "/login";
   }
 
-  if (to.meta.requiresAdmin && !isAdmin) {
+  if (to.meta.requiresStaffPanel && !isStaffPanel) {
     window.alert("Bạn không có quyền truy cập khu vực quản trị.");
     return "/";
   }

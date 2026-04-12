@@ -98,10 +98,10 @@
           <AdminTableShell
             :loading="isLoading"
             :empty="!isLoading && filteredRows.length === 0"
-            :colspan="6"
+            :colspan="7"
             loading-text="Đang tải dữ liệu mượn..."
             empty-text="Không có phiếu mượn phù hợp bộ lọc hiện tại."
-            min-width-class="min-w-[860px]"
+            min-width-class="min-w-[980px]"
           >
             <template #head>
               <tr
@@ -126,6 +126,11 @@
                   class="px-4 py-4 text-[10px] font-bold tracking-widest text-[var(--on-surface-variant)] uppercase"
                 >
                   Mượn / Hạn trả
+                </th>
+                <th
+                  class="px-4 py-4 text-[10px] font-bold tracking-widest text-[var(--on-surface-variant)] uppercase"
+                >
+                  Nhân viên duyệt
                 </th>
                 <th
                   class="px-4 py-4 text-center text-[10px] font-bold tracking-widest text-[var(--on-surface-variant)] uppercase"
@@ -181,6 +186,12 @@
                     "
                   >
                     Hạn: {{ loan.dueAt }}
+                  </p>
+                </td>
+                <td class="px-4 py-4">
+                  <p class="text-sm font-semibold">{{ loan.staffName }}</p>
+                  <p class="text-[11px] text-[var(--on-surface-variant)]">
+                    {{ loan.staffCode }}
                   </p>
                 </td>
                 <td class="px-4 py-4 text-center">
@@ -277,6 +288,22 @@
                 <p class="text-sm font-bold">{{ selectedLoan.memberName }}</p>
                 <p class="text-xs text-[var(--on-surface-variant)]">
                   {{ selectedLoan.memberId }}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <p
+                class="mb-2 text-[11px] font-bold tracking-wider text-[var(--on-surface-variant)] uppercase"
+              >
+                Nhân viên xử lý
+              </p>
+              <div
+                class="rounded-xl bg-[var(--surface-container-lowest)] p-4 shadow-sm"
+              >
+                <p class="text-sm font-bold">{{ selectedLoan.staffName }}</p>
+                <p class="text-xs text-[var(--on-surface-variant)]">
+                  {{ selectedLoan.staffCode }}
                 </p>
               </div>
             </div>
@@ -461,6 +488,8 @@ const filteredRows = computed(() => {
       item.code,
       item.memberName,
       item.memberId,
+      item.staffName,
+      item.staffCode,
       item.bookTitle,
       item.bookCode,
       item.statusLabel,
@@ -570,6 +599,8 @@ function formatBorrowItem(item) {
     ? item.SACH.TACGIA.filter(Boolean)
     : [];
   const bookAuthor = authors.length ? authors.join(", ") : "";
+  const staffName = item.NHANVIEN?.HOTEN || "Chưa có nhân viên duyệt";
+  const staffCode = item.NHANVIEN?.MSNV || item.MSNV || "---";
 
   return {
     id: item._id,
@@ -577,6 +608,8 @@ function formatBorrowItem(item) {
     createdAt: `Tạo: ${formatDate(item.NGAYYEUCAU || item.created_at)}`,
     memberName: item.DOCGIA?.HOTEN || "Không rõ độc giả",
     memberId: item.MADOCGIA || item.DOCGIA?.MADOCGIA || "---",
+    staffName,
+    staffCode,
     bookCode,
     bookTitle,
     bookAuthor,

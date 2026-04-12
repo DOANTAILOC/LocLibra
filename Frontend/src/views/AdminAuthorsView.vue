@@ -15,11 +15,15 @@
     :columns="columns"
     :form-fields="formFields"
     :detail-fields="detailFields"
+    :can-manage="authStore.isSystemAdmin"
   />
 </template>
 
 <script setup>
 import EntityManagerView from "../components/admin/EntityManagerView.vue";
+import { useAuthStore } from "../stores/auth";
+
+const authStore = useAuthStore();
 
 const columns = [
   { key: "MATG", label: "Mã tác giả" },

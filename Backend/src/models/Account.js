@@ -18,7 +18,7 @@ const AccountSchema = new mongoose.Schema(
     role: {
       type: String,
       required: true,
-      enum: ["staff", "reader"],
+      enum: ["admin", "staff", "reader"],
     },
     staffId: {
       type: mongoose.Schema.Types.ObjectId,

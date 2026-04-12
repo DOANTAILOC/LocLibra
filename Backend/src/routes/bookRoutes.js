@@ -20,19 +20,19 @@ router.get("/", getBooks);
 router.get(
   "/next-code",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("admin"),
   getNextBookCodePreview,
 );
 router.post(
   "/upload-cover",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("admin"),
   uploadBookCover,
   uploadBookCoverImage,
 );
 router.get("/:id", getBookById);
-router.post("/", authenticate, authorizeRoles("staff"), createBook);
-router.put("/:id", authenticate, authorizeRoles("staff"), updateBook);
-router.delete("/:id", authenticate, authorizeRoles("staff"), deleteBook);
+router.post("/", authenticate, authorizeRoles("admin"), createBook);
+router.put("/:id", authenticate, authorizeRoles("admin"), updateBook);
+router.delete("/:id", authenticate, authorizeRoles("admin"), deleteBook);
 
 module.exports = router;

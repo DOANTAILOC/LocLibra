@@ -151,7 +151,7 @@
                 </span>
               </div>
 
-              <div class="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+              <div class="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
                 <div>
                   <p class="text-[var(--on-surface-variant)]">Yêu cầu</p>
                   <p class="font-semibold text-[var(--on-surface)]">
@@ -181,6 +181,12 @@
                   <p class="text-[var(--on-surface-variant)]">Tiền phạt</p>
                   <p class="font-semibold text-[var(--on-surface)]">
                     {{ formatCurrency(borrow.fineAmount) }}
+                  </p>
+                </div>
+                <div>
+                  <p class="text-[var(--on-surface-variant)]">Nhân viên</p>
+                  <p class="font-semibold text-[var(--on-surface)]">
+                    {{ borrow.staffName }}
                   </p>
                 </div>
               </div>
@@ -372,6 +378,8 @@ const normalizedBorrows = computed(() => {
     dueDate: item.NGAYHENTRA || null,
     returnedDate: item.NGAYTRA || null,
     rejectReason: item.LYDOTUCHOI || "",
+    staffCode: item?.NHANVIEN?.MSNV || item.MSNV || "---",
+    staffName: item?.NHANVIEN?.HOTEN || "Chưa có nhân viên xử lý",
     overdueDays: Number(item.SONGAYTRE || 0),
     fineAmount: Number(item.TIENPHAT || 0),
     fineStatus: item.TRANGTHAI_PHAT || "PAID",
@@ -409,6 +417,8 @@ const filteredBorrows = computed(() => {
       item.bookCode,
       item.bookTitle,
       item.bookAuthors.join(" "),
+      item.staffCode,
+      item.staffName,
       statusLabel(item.status),
       extensionRequestStatusLabel(item.extensionRequestStatus),
     ]
@@ -603,6 +613,10 @@ function timelineItems(item) {
   return [
     { label: "Ngày yêu cầu", value: formatDateTime(item.requestDate) },
     { label: "Ngày duyệt", value: formatDateTime(item.approveDate) },
+    {
+      label: "Nhân viên xử lý",
+      value: `${item.staffName} (${item.staffCode})`,
+    },
     { label: "Hạn nhận sách", value: formatDateTime(item.pickupDeadline) },
     { label: "Ngày nhận sách", value: formatDateTime(item.borrowDate) },
     { label: "Hạn trả", value: formatDateTime(item.dueDate) },

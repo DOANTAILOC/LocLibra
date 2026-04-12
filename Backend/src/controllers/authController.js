@@ -6,7 +6,9 @@ const Borrow = require("../models/Borrow");
 const cloudinary = require("../config/cloudinary");
 
 const getRedirectPathByRole = (role) => {
-  return role === "staff" ? "/" : "/my-loans";
+  if (role === "admin") return "/admin";
+  if (role === "staff") return "/admin/borrows";
+  return "/my-loans";
 };
 
 const generateToken = (account) => {
@@ -215,7 +217,7 @@ const login = async (req, res) => {
     const token = generateToken(account);
 
     let profile = null;
-    if (account.role === "staff" && account.staffId) {
+    if (["staff", "admin"].includes(account.role) && account.staffId) {
       profile = await Staff.findById(account.staffId);
     }
     if (account.role === "reader" && account.readerId) {
@@ -255,7 +257,7 @@ const verifyToken = async (req, res) => {
     }
 
     let profile = null;
-    if (account.role === "staff" && account.staffId) {
+    if (["staff", "admin"].includes(account.role) && account.staffId) {
       profile = await Staff.findById(account.staffId);
     }
     if (account.role === "reader" && account.readerId) {
@@ -463,6 +465,144 @@ const uploadMyAvatar = async (req, res) => {
   }
 };
 
+const updateMyStaffProfile = async (req, res) => {
+  try {
+    if (
+      !req.account?.staffId ||
+      !["staff", "admin"].includes(req.account.role)
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Tài khoản không phải nhân viên" });
+    }
+
+    const allowedFields = ["HoTenNV", "DiaChi", "SoDienThoai"];
+    const payload = {};
+
+    allowedFields.forEach((field) => {
+      if (!Object.prototype.hasOwnProperty.call(req.body, field)) return;
+      payload[field] = String(req.body[field] || "").trim();
+    });
+
+    const profile = await Staff.findByIdAndUpdate(
+      req.account.staffId,
+      payload,
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!profile) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy hồ sơ nhân viên" });
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật thông tin cá nhân thành công",
+      profile,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: "Lỗi khi cập nhật thông tin cá nhân",
+      error: error.message,
+    });
+  }
+};
+
+const uploadMyStaffAvatar = async (req, res) => {
+  try {
+    if (
+      !req.account?.staffId ||
+      !["staff", "admin"].includes(req.account.role)
+    ) {
+      return res
+        .status(403)
+        .json({ message: "Tài khoản không phải nhân viên" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Vui lòng chọn ảnh avatar" });
+    }
+
+    const profile = await Staff.findById(req.account.staffId);
+    if (!profile) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy hồ sơ nhân viên" });
+    }
+
+    const uploadResult = await uploadBufferToCloudinary(
+      req.file.buffer,
+      "loclibrary/avatars",
+    );
+
+    const oldPublicId = profile.AVATAR_PUBLIC_ID;
+    profile.AVATAR_URL = uploadResult.secure_url || "";
+    profile.AVATAR_PUBLIC_ID = uploadResult.public_id || "";
+    await profile.save();
+
+    if (oldPublicId && oldPublicId !== profile.AVATAR_PUBLIC_ID) {
+      cloudinary.uploader.destroy(oldPublicId).catch(() => null);
+    }
+
+    return res.status(200).json({
+      message: "Cập nhật avatar thành công",
+      avatar: {
+        url: profile.AVATAR_URL,
+        publicId: profile.AVATAR_PUBLIC_ID,
+      },
+      profile,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      message: "Lỗi khi tải ảnh avatar",
+      error: error.message,
+    });
+  }
+};
+
+const updateMyPassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({
+          message: "Vui lòng cung cấp mật khẩu hiện tại và mật khẩu mới",
+        });
+    }
+
+    if (String(newPassword).trim().length < 3) {
+      return res
+        .status(400)
+        .json({ message: "Mật khẩu mới phải có ít nhất 3 ký tự" });
+    }
+
+    const account = await Account.findById(req.account.id).select("+password");
+    if (!account) {
+      return res.status(404).json({ message: "Tài khoản không tồn tại" });
+    }
+
+    const isPasswordValid = await account.verifyPassword(currentPassword);
+    if (!isPasswordValid) {
+      return res.status(400).json({ message: "Mật khẩu hiện tại không đúng" });
+    }
+
+    account.password = newPassword;
+    await account.save();
+
+    return res.status(200).json({ message: "Đổi mật khẩu thành công" });
+  } catch (error) {
+    return res.status(400).json({
+      message: "Lỗi khi đổi mật khẩu",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   registerStaff,
   registerReader,
@@ -471,4 +611,7 @@ module.exports = {
   getReadersForStaff,
   updateMyReaderProfile,
   uploadMyAvatar,
+  updateMyStaffProfile,
+  uploadMyStaffAvatar,
+  updateMyPassword,
 };

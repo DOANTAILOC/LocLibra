@@ -1,6 +1,7 @@
 const Author = require("../models/Author");
 const Genre = require("../models/Genre");
 const Staff = require("../models/Staff");
+const Account = require("../models/Account");
 const Publisher = require("../models/Publisher");
 const Book = require("../models/Book");
 const Borrow = require("../models/Borrow");
@@ -48,6 +49,20 @@ const generateNextGenreCode = async () => {
   }, 0);
 
   return `TL${String(maxOrder + 1).padStart(3, "0")}`;
+};
+
+const generateNextStaffCode = async () => {
+  const existing = await Staff.find({ MSNV: /^NV\d+$/i })
+    .select("MSNV")
+    .lean();
+
+  const maxOrder = existing.reduce((max, item) => {
+    const order = Number.parseInt(String(item.MSNV).replace(/^NV/i, ""), 10);
+    if (Number.isNaN(order)) return max;
+    return Math.max(max, order);
+  }, 0);
+
+  return `NV${String(maxOrder + 1).padStart(3, "0")}`;
 };
 
 const normalizeError = (res, message, error, status = 500) => {
@@ -374,17 +389,114 @@ const getStaffs = async (req, res) => {
       };
     }
 
-    const items = await Staff.find(filter).sort({ created_at: -1 });
+    const staffs = await Staff.find(filter).sort({ created_at: -1 }).lean();
+    const staffObjectIds = staffs.map((item) => item._id);
+    const accounts = await Account.find({
+      role: { $in: ["staff", "admin"] },
+      staffId: { $in: staffObjectIds },
+    })
+      .select("staffId username role")
+      .lean();
+
+    const accountMap = new Map(
+      accounts.map((item) => [String(item.staffId), item]),
+    );
+
+    const items = staffs.map((staff) => {
+      const linkedAccount = accountMap.get(String(staff._id));
+      return {
+        ...staff,
+        username: linkedAccount?.username || "",
+        accountRole: linkedAccount?.role || "staff",
+      };
+    });
+
     return res.status(200).json({ items });
   } catch (error) {
     return normalizeError(res, "Lỗi khi lấy danh sách nhân viên", error);
   }
 };
 
+const getNextStaffCodePreview = async (req, res) => {
+  try {
+    const nextCode = await generateNextStaffCode();
+    return res.status(200).json({ nextCode });
+  } catch (error) {
+    return normalizeError(res, "Lỗi khi tạo mã nhân viên kế tiếp", error);
+  }
+};
+
 const createStaff = async (req, res) => {
   try {
-    const item = await Staff.create(req.body);
-    return res.status(201).json(item);
+    const {
+      HoTenNV,
+      ChucVu,
+      DiaChi,
+      SoDienThoai,
+      username,
+      password,
+      accountRole,
+    } = req.body || {};
+
+    if (!username) {
+      return res.status(400).json({
+        message: "Vui lòng nhập username để nhân viên đăng nhập",
+      });
+    }
+
+    const normalizedAccountRole =
+      String(accountRole || "staff").toLowerCase() === "admin"
+        ? "admin"
+        : "staff";
+    const rawPassword = String(password || "").trim();
+    const finalPassword = rawPassword || "123";
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      const generatedMSNV = await generateNextStaffCode();
+
+      let item;
+      try {
+        item = await Staff.create({
+          MSNV: generatedMSNV,
+          HoTenNV,
+          ChucVu,
+          DiaChi,
+          SoDienThoai,
+        });
+      } catch (error) {
+        const isDuplicateCode =
+          error?.code === 11000 && error?.keyPattern?.MSNV;
+        if (!isDuplicateCode || retry === 2) {
+          throw error;
+        }
+        continue;
+      }
+
+      try {
+        await Account.create({
+          username,
+          password: finalPassword,
+          role: normalizedAccountRole,
+          staffId: item._id,
+        });
+      } catch (accountError) {
+        await Staff.findByIdAndDelete(item._id);
+        if (
+          accountError?.code === 11000 &&
+          accountError?.keyPattern?.username
+        ) {
+          return res.status(409).json({ message: "Username đã tồn tại" });
+        }
+        throw accountError;
+      }
+
+      const payload = item.toObject();
+      payload.username = String(username).toLowerCase();
+      payload.accountRole = normalizedAccountRole;
+      return res.status(201).json(payload);
+    }
+
+    return res.status(500).json({ message: "Không thể tạo mã nhân viên" });
   } catch (error) {
     return normalizeError(res, "Lỗi khi tạo nhân viên", error, 400);
   }
@@ -392,7 +504,10 @@ const createStaff = async (req, res) => {
 
 const updateStaff = async (req, res) => {
   try {
-    const item = await Staff.findByIdAndUpdate(req.params.id, req.body, {
+    const { username, password, accountRole, ...staffPayload } = req.body || {};
+    delete staffPayload.MSNV;
+
+    const item = await Staff.findByIdAndUpdate(req.params.id, staffPayload, {
       new: true,
       runValidators: true,
     });
@@ -401,8 +516,43 @@ const updateStaff = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy nhân viên" });
     }
 
-    return res.status(200).json(item);
+    const account = await Account.findOne({
+      role: { $in: ["staff", "admin"] },
+      staffId: item._id,
+    });
+    const normalizedAccountRole =
+      String(accountRole || "").toLowerCase() === "admin" ? "admin" : "staff";
+    if (account) {
+      if (username) {
+        account.username = String(username).trim().toLowerCase();
+      }
+      if (password) {
+        account.password = password;
+      }
+      if (accountRole) {
+        account.role = normalizedAccountRole;
+      }
+
+      if (username || password || accountRole) {
+        await account.save();
+      }
+    } else if (username) {
+      await Account.create({
+        username,
+        password: String(password || "").trim() || "123",
+        role: normalizedAccountRole,
+        staffId: item._id,
+      });
+    }
+
+    const payload = item.toObject();
+    payload.username = username || account?.username || "";
+    payload.accountRole = accountRole || account?.role || "staff";
+    return res.status(200).json(payload);
   } catch (error) {
+    if (error?.code === 11000 && error?.keyPattern?.username) {
+      return res.status(409).json({ message: "Username đã tồn tại" });
+    }
     return normalizeError(res, "Lỗi khi cập nhật nhân viên", error, 400);
   }
 };
@@ -413,6 +563,11 @@ const deleteStaff = async (req, res) => {
     if (!item) {
       return res.status(404).json({ message: "Không tìm thấy nhân viên" });
     }
+
+    await Account.deleteMany({
+      role: { $in: ["staff", "admin"] },
+      staffId: item._id,
+    });
 
     return res.status(200).json({ message: "Xóa nhân viên thành công" });
   } catch (error) {
@@ -522,6 +677,7 @@ module.exports = {
   updateGenre,
   deleteGenre,
   getStaffs,
+  getNextStaffCodePreview,
   createStaff,
   updateStaff,
   deleteStaff,

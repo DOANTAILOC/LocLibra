@@ -11,6 +11,10 @@ export const useAuthStore = defineStore("auth", () => {
   const isAdmin = computed(
     () => user.value?.role === "staff" || user.value?.role === "admin",
   );
+  const isSystemAdmin = computed(() => user.value?.role === "admin");
+  const isStaffPanel = computed(() =>
+    ["staff", "admin"].includes(user.value?.role),
+  );
   const isReader = computed(() => user.value?.role === "reader");
 
   function saveAuth(data) {
@@ -90,6 +94,8 @@ export const useAuthStore = defineStore("auth", () => {
     user,
     isLoggedIn,
     isAdmin,
+    isSystemAdmin,
+    isStaffPanel,
     isReader,
     login,
     registerReader,

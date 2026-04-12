@@ -48,6 +48,7 @@
                 Làm mới
               </button>
               <button
+                v-if="canManageCatalog"
                 type="button"
                 class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-[var(--on-primary)]"
                 @click="openCreateModal"
@@ -115,7 +116,7 @@
           <AdminTableShell
             :loading="isLoading"
             :empty="!isLoading && filteredBooks.length === 0"
-            :colspan="7"
+            :colspan="canManageCatalog ? 7 : 6"
             loading-text="Đang tải dữ liệu kho sách..."
             empty-text="Không tìm thấy sách phù hợp với bộ lọc hiện tại."
             :total-text="`Tổng ${filteredBooks.length} đầu sách`"
@@ -156,6 +157,7 @@
                   Trạng thái
                 </th>
                 <th
+                  v-if="canManageCatalog"
                   class="px-6 py-4 text-right text-[10px] font-bold tracking-widest text-[var(--on-surface-variant)] uppercase"
                 >
                   Hành động
@@ -217,7 +219,7 @@
                     :custom-class="book.stockClass"
                   />
                 </td>
-                <td class="px-6 py-4 text-right">
+                <td v-if="canManageCatalog" class="px-6 py-4 text-right">
                   <div
                     class="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                   >
@@ -359,6 +361,7 @@
 
             <div class="flex flex-col gap-2 pt-3">
               <button
+                v-if="canManageCatalog"
                 type="button"
                 class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] py-2.5 text-xs font-bold text-[var(--on-primary)]"
                 :disabled="!selectedBook"
@@ -368,6 +371,7 @@
                 Chỉnh sửa sách
               </button>
               <button
+                v-if="canManageCatalog"
                 type="button"
                 class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[rgb(83_99_79/25%)] py-2.5 text-xs font-bold text-[var(--primary)]"
                 :disabled="
@@ -801,6 +805,10 @@ import FeedbackAlert from "../components/admin/shared/FeedbackAlert.vue";
 import PaginationBar from "../components/shared/PaginationBar.vue";
 import StatusChip from "../components/admin/shared/StatusChip.vue";
 import api from "../api/axios";
+import { useAuthStore } from "../stores/auth";
+
+const authStore = useAuthStore();
+const canManageCatalog = computed(() => authStore.isSystemAdmin);
 
 const mobileMenuOpen = ref(false);
 const isLoading = ref(false);
@@ -1269,6 +1277,7 @@ async function submitMetaCreate() {
 }
 
 async function openCreateModal() {
+  if (!canManageCatalog.value) return;
   errorMessage.value = "";
   successMessage.value = "";
   modalMode.value = "create";
@@ -1280,6 +1289,7 @@ async function openCreateModal() {
 }
 
 function openEditModal(book) {
+  if (!canManageCatalog.value) return;
   errorMessage.value = "";
   successMessage.value = "";
   modalMode.value = "edit";
@@ -1421,6 +1431,7 @@ async function uploadCoverIfNeeded() {
 }
 
 async function handleSubmitBook() {
+  if (!canManageCatalog.value) return;
   isCreating.value = true;
   errorMessage.value = "";
   successMessage.value = "";
@@ -1474,6 +1485,7 @@ async function handleSubmitBook() {
 }
 
 async function handleDeleteBook(book) {
+  if (!canManageCatalog.value) return;
   if (!book?.id) return;
 
   const accepted = window.confirm(

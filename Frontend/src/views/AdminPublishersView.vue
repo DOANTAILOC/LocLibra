@@ -15,11 +15,15 @@
     :detail-fields="detailFields"
     auto-code-field-key="MANXB"
     auto-code-endpoint="/admin/publishers/next-code"
+    :can-manage="authStore.isSystemAdmin"
   />
 </template>
 
 <script setup>
 import EntityManagerView from "../components/admin/EntityManagerView.vue";
+import { useAuthStore } from "../stores/auth";
+
+const authStore = useAuthStore();
 
 const columns = [
   { key: "MANXB", label: "Mã NXB" },

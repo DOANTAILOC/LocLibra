@@ -38,65 +38,80 @@ router.patch(
   requestBorrowExtension,
 );
 
-router.get("/", authenticate, authorizeRoles("staff"), getBorrows);
+router.get("/", authenticate, authorizeRoles("staff", "admin"), getBorrows);
 
 router.get(
   "/pending",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   getPendingRequests,
 );
-router.get("/active", authenticate, authorizeRoles("staff"), getActiveBorrows);
+router.get(
+  "/active",
+  authenticate,
+  authorizeRoles("staff", "admin"),
+  getActiveBorrows,
+);
 router.get(
   "/overdue",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   getOverdueBorrows,
 );
 router.patch(
   "/sync-overdue",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   syncOverdue,
 );
 
 router.patch(
   "/:id/approve",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   approveBorrowRequest,
 );
 router.patch(
   "/:id/reject",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   rejectBorrowRequest,
 );
 router.patch(
   "/:id/hand-over",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   handOverBook,
 );
-router.patch("/:id/return", authenticate, authorizeRoles("staff"), returnBook);
+router.patch(
+  "/:id/return",
+  authenticate,
+  authorizeRoles("staff", "admin"),
+  returnBook,
+);
 router.patch(
   "/:id/approve-extension",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   approveBorrowExtension,
 );
 router.patch(
   "/:id/reject-extension",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   rejectBorrowExtension,
 );
 router.patch(
   "/:id/lost",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   reportLostBook,
 );
-router.patch("/:id/pay-fine", authenticate, authorizeRoles("staff"), payFine);
+router.patch(
+  "/:id/pay-fine",
+  authenticate,
+  authorizeRoles("staff", "admin"),
+  payFine,
+);
 
 module.exports = router;

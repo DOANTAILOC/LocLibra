@@ -754,17 +754,29 @@ const getMyBorrowRequests = async (req, res) => {
     });
 
     const bookIds = [...new Set(borrows.map((borrow) => borrow.MASACH))];
+    const staffIds = [
+      ...new Set(
+        borrows
+          .map((borrow) => String(borrow.MSNV || "").trim())
+          .filter(Boolean),
+      ),
+    ];
     const books = await Book.find({
       MASACH: { $in: bookIds },
       TRANGTHAI: { $ne: "DELETED" },
     })
       .select("MASACH TENSACH TACGIA ANHBIA_URL")
       .lean();
+    const staffs = await Staff.find({ MSNV: { $in: staffIds } })
+      .select("MSNV HoTenNV ChucVu")
+      .lean();
 
     const bookMap = new Map(books.map((book) => [book.MASACH, book]));
+    const staffMap = new Map(staffs.map((staff) => [staff.MSNV, staff]));
 
     const enrichedBorrows = borrows.map((borrow) => {
       const book = bookMap.get(borrow.MASACH);
+      const staff = staffMap.get(borrow.MSNV);
 
       return {
         ...borrow.toObject(),
@@ -773,6 +785,11 @@ const getMyBorrowRequests = async (req, res) => {
           TENSACH: book?.TENSACH || null,
           TACGIA: Array.isArray(book?.TACGIA) ? book.TACGIA : [],
           ANHBIA_URL: book?.ANHBIA_URL || "",
+        },
+        NHANVIEN: {
+          MSNV: borrow.MSNV || null,
+          HOTEN: staff?.HoTenNV || null,
+          CHUCVU: staff?.ChucVu || null,
         },
       };
     });
@@ -832,13 +849,23 @@ const getBorrows = async (req, res) => {
 
     const readerIds = [...new Set(borrows.map((borrow) => borrow.MADOCGIA))];
     const bookIds = [...new Set(borrows.map((borrow) => borrow.MASACH))];
+    const staffIds = [
+      ...new Set(
+        borrows
+          .map((borrow) => String(borrow.MSNV || "").trim())
+          .filter(Boolean),
+      ),
+    ];
 
-    const [readers, books] = await Promise.all([
+    const [readers, books, staffs] = await Promise.all([
       Reader.find({ MADOCGIA: { $in: readerIds } })
         .select("MADOCGIA HOLOT TEN")
         .lean(),
       Book.find({ MASACH: { $in: bookIds }, TRANGTHAI: { $ne: "DELETED" } })
         .select("MASACH TENSACH TACGIA ANHBIA_URL")
+        .lean(),
+      Staff.find({ MSNV: { $in: staffIds } })
+        .select("MSNV HoTenNV ChucVu")
         .lean(),
     ]);
 
@@ -846,10 +873,12 @@ const getBorrows = async (req, res) => {
       readers.map((reader) => [reader.MADOCGIA, reader]),
     );
     const bookMap = new Map(books.map((book) => [book.MASACH, book]));
+    const staffMap = new Map(staffs.map((staff) => [staff.MSNV, staff]));
 
     const enrichedBorrows = borrows.map((borrow) => {
       const reader = readerMap.get(borrow.MADOCGIA);
       const book = bookMap.get(borrow.MASACH);
+      const staff = staffMap.get(borrow.MSNV);
       const fullName = reader
         ? [reader.HOLOT, reader.TEN].filter(Boolean).join(" ").trim()
         : null;
@@ -865,6 +894,11 @@ const getBorrows = async (req, res) => {
           TENSACH: book?.TENSACH || null,
           TACGIA: Array.isArray(book?.TACGIA) ? book.TACGIA : [],
           ANHBIA_URL: book?.ANHBIA_URL || "",
+        },
+        NHANVIEN: {
+          MSNV: borrow.MSNV || null,
+          HOTEN: staff?.HoTenNV || null,
+          CHUCVU: staff?.ChucVu || null,
         },
       };
     });

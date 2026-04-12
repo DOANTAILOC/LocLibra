@@ -7,6 +7,9 @@ const {
   getReadersForStaff,
   updateMyReaderProfile,
   uploadMyAvatar,
+  updateMyStaffProfile,
+  uploadMyStaffAvatar,
+  updateMyPassword,
 } = require("../controllers/authController");
 const {
   authenticate,
@@ -33,10 +36,29 @@ router.post(
   uploadAvatar,
   uploadMyAvatar,
 );
+router.patch(
+  "/my-staff-profile",
+  authenticate,
+  authorizeRoles("staff", "admin"),
+  updateMyStaffProfile,
+);
+router.post(
+  "/my-staff-avatar",
+  authenticate,
+  authorizeRoles("staff", "admin"),
+  uploadAvatar,
+  uploadMyStaffAvatar,
+);
+router.patch(
+  "/my-password",
+  authenticate,
+  authorizeRoles("reader", "staff", "admin"),
+  updateMyPassword,
+);
 router.get(
   "/readers",
   authenticate,
-  authorizeRoles("staff"),
+  authorizeRoles("staff", "admin"),
   getReadersForStaff,
 );
 

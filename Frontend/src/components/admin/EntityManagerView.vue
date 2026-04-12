@@ -32,6 +32,7 @@
                 Làm mới
               </button>
               <button
+                v-if="canManage"
                 type="button"
                 class="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-[var(--on-primary)]"
                 @click="openCreateModal"
@@ -64,7 +65,7 @@
           <AdminTableShell
             :loading="isLoading"
             :empty="!isLoading && filteredEntities.length === 0"
-            :colspan="columns.length + 1"
+            :colspan="canManage ? columns.length + 1 : columns.length"
             :loading-text="loadingText"
             :empty-text="emptyText"
             :total-text="`Tổng ${filteredEntities.length} bản ghi`"
@@ -82,6 +83,7 @@
                   {{ column.label }}
                 </th>
                 <th
+                  v-if="canManage"
                   class="px-6 py-4 text-right text-[10px] font-bold tracking-widest text-[var(--on-surface-variant)] uppercase"
                 >
                   Hành động
@@ -108,7 +110,7 @@
                 >
                   {{ item[column.key] || "---" }}
                 </td>
-                <td class="px-6 py-4 text-right">
+                <td v-if="canManage" class="px-6 py-4 text-right">
                   <div
                     class="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                   >
@@ -171,6 +173,7 @@
 
             <div class="flex flex-col gap-2 pt-2">
               <button
+                v-if="canManage"
                 type="button"
                 class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] py-2.5 text-xs font-bold text-[var(--on-primary)]"
                 @click="openEditModal(selectedEntity)"
@@ -179,6 +182,7 @@
                 Chỉnh sửa
               </button>
               <button
+                v-if="canManage"
                 type="button"
                 class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[rgb(83_99_79/25%)] py-2.5 text-xs font-bold text-[var(--primary)]"
                 :disabled="isDeletingId === selectedEntity?._id"
@@ -194,11 +198,12 @@
     </main>
 
     <div
-      v-if="showModal"
+      v-if="showModal && canManage"
       class="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4"
     >
       <div
-        class="w-full max-w-xl rounded-2xl bg-[var(--surface-container-lowest)] p-6 shadow-2xl"
+        class="w-full rounded-2xl bg-[var(--surface-container-lowest)] p-6 shadow-2xl"
+        :class="[modalMaxWidthClass, 'max-h-[88vh] overflow-y-auto']"
       >
         <div class="mb-5 flex items-center justify-between">
           <h3 class="text-2xl">
@@ -215,8 +220,15 @@
           </button>
         </div>
 
-        <form class="grid grid-cols-1 gap-4" @submit.prevent="handleSubmit">
-          <div v-for="field in formFields" :key="field.key" class="space-y-1">
+        <form
+          :class="['grid gap-4', formGridClass]"
+          @submit.prevent="handleSubmit"
+        >
+          <div
+            v-for="field in formFields"
+            :key="field.key"
+            :class="['space-y-1', field.fullWidth ? 'md:col-span-2' : '']"
+          >
             <label class="form-label">{{ field.label }}</label>
             <input
               v-if="isAutoCodeField(field)"
@@ -229,7 +241,7 @@
               v-else-if="field.type === 'textarea'"
               v-model.trim="formData[field.key]"
               class="form-input min-h-[90px]"
-              :required="field.required"
+              :required="isFieldRequired(field)"
               :placeholder="field.placeholder || ''"
             ></textarea>
             <input
@@ -237,12 +249,12 @@
               v-model.trim="formData[field.key]"
               class="form-input"
               :type="field.type || 'text'"
-              :required="field.required"
+              :required="isFieldRequired(field)"
               :placeholder="field.placeholder || ''"
             />
           </div>
 
-          <div class="mt-2 flex justify-end gap-2">
+          <div class="mt-2 flex justify-end gap-2 md:col-span-2">
             <button
               type="button"
               class="btn-secondary px-4 py-2 text-sm"
@@ -301,7 +313,12 @@ const props = defineProps({
   detailFields: { type: Array, default: () => [] },
   autoCodeFieldKey: { type: String, default: "" },
   autoCodeEndpoint: { type: String, default: "" },
+  canManage: { type: Boolean, default: true },
+  modalMaxWidthClass: { type: String, default: "max-w-xl" },
+  formGridClass: { type: String, default: "grid-cols-1" },
 });
+
+const canManage = computed(() => props.canManage !== false);
 
 const mobileMenuOpen = ref(false);
 const isLoading = ref(false);
@@ -415,6 +432,22 @@ const isAutoCodeField = (field) => {
     props.autoCodeFieldKey &&
     field.key === props.autoCodeFieldKey
   );
+};
+
+const isFieldRequired = (field) => {
+  if (mode.value === "create") {
+    if (typeof field.requiredOnCreate === "boolean") {
+      return field.requiredOnCreate;
+    }
+  }
+
+  if (mode.value === "edit") {
+    if (typeof field.requiredOnEdit === "boolean") {
+      return field.requiredOnEdit;
+    }
+  }
+
+  return Boolean(field.required);
 };
 
 const fetchAutoCodePreview = async () => {
