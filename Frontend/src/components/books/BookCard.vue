@@ -34,7 +34,10 @@
           v-for="star in 5"
           :key="star"
           class="material-symbols-outlined text-[16px]"
-          :class="starClass(star)"
+          :class="[
+            starClass(star),
+            { 'material-symbols-filled': starIcon(star) !== 'star_outline' },
+          ]"
         >
           {{ starIcon(star) }}
         </span>
@@ -66,14 +69,11 @@
         type="button"
         :class="
           isAvailable && !isBorrowLocked
-            ? 'mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] px-5 py-3 text-base font-bold text-white transition hover:brightness-95'
-            : 'mt-auto inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--outline-variant)] bg-white px-5 py-3 text-base font-bold text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-high)]'
+            ? 'mt-auto inline-flex w-full items-center justify-center rounded-2xl bg-[var(--primary)] px-5 py-3 text-base font-bold text-white transition hover:brightness-95'
+            : 'mt-auto inline-flex w-full items-center justify-center rounded-2xl border border-[var(--outline-variant)] bg-white px-5 py-3 text-base font-bold text-[var(--on-surface-variant)] transition hover:bg-[var(--surface-container-high)]'
         "
         @click.stop="onActionClick"
       >
-        <span class="material-symbols-outlined text-[20px]">{{
-          actionIcon
-        }}</span>
         {{ actionLabel }}
       </button>
     </div>
@@ -184,11 +184,6 @@ const actionLabel = computed(() => {
   if (normalizedBorrowStatus.value === "BORROWING") return "Đang mượn";
   if (normalizedBorrowStatus.value === "OVERDUE") return "Đang quá hạn";
   return isAvailable.value ? "Mượn ngay" : "Xem chi tiết";
-});
-
-const actionIcon = computed(() => {
-  if (isBorrowLocked.value) return "schedule";
-  return isAvailable.value ? "menu_book" : "visibility";
 });
 
 const unavailableLabel = computed(

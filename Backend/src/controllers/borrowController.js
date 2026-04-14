@@ -9,6 +9,8 @@ const DEFAULT_PICKUP_DEADLINE_DAYS = 2;
 const DEFAULT_EXTENSION_DAYS = 7;
 const MAX_EXTENSION_COUNT = 1;
 const DAILY_FINE_RATE = 2000;
+const BORROW_CODE_PREFIX = "PM";
+const BORROW_CODE_WIDTH = 6;
 const BORROW_STATUSES = [
   "PENDING",
   "APPROVED",
@@ -111,15 +113,84 @@ const cancelExpiredApprovedBorrows = async ({ madocgia } = {}) => {
   return { cancelledCount: transitionedBorrows.length };
 };
 
-const syncOverdueForReader = async (madocgia) => {
-  return Borrow.updateMany(
+const syncOverdueStateAndFine = async ({ madocgia } = {}) => {
+  const now = new Date();
+  const baseFilter = {
+    NGAYHENTRA: { $lt: now },
+  };
+
+  if (madocgia) {
+    baseFilter.MADOCGIA = madocgia;
+  }
+
+  const statusUpdateResult = await Borrow.updateMany(
     {
-      MADOCGIA: madocgia,
+      ...baseFilter,
       TRANGTHAI: "BORROWING",
-      NGAYHENTRA: { $lt: new Date() },
     },
     { $set: { TRANGTHAI: "OVERDUE" } },
   );
+
+  const overdueBorrows = await Borrow.find({
+    ...baseFilter,
+    TRANGTHAI: "OVERDUE",
+  })
+    .select("_id NGAYHENTRA SONGAYTRE TIENPHAT TRANGTHAI_PHAT")
+    .lean();
+
+  const bulkOps = overdueBorrows.reduce((ops, borrow) => {
+    const overdueDays = getOverdueDays(borrow?.NGAYHENTRA, now);
+    const fineAmount = overdueDays * DAILY_FINE_RATE;
+    const isAlreadyPaid =
+      String(borrow?.TRANGTHAI_PHAT || "").toUpperCase() === "PAID";
+
+    const nextOverdueDays = isAlreadyPaid
+      ? Number(borrow?.SONGAYTRE || 0)
+      : overdueDays;
+    const nextFineAmount = isAlreadyPaid
+      ? Number(borrow?.TIENPHAT || 0)
+      : fineAmount;
+    const nextFineStatus = isAlreadyPaid
+      ? "PAID"
+      : fineAmount > 0
+        ? "UNPAID"
+        : "PAID";
+
+    const shouldUpdate =
+      Number(borrow?.SONGAYTRE || 0) !== nextOverdueDays ||
+      Number(borrow?.TIENPHAT || 0) !== nextFineAmount ||
+      String(borrow?.TRANGTHAI_PHAT || "") !== nextFineStatus;
+
+    if (!shouldUpdate) return ops;
+
+    ops.push({
+      updateOne: {
+        filter: { _id: borrow._id },
+        update: {
+          $set: {
+            SONGAYTRE: nextOverdueDays,
+            TIENPHAT: nextFineAmount,
+            TRANGTHAI_PHAT: nextFineStatus,
+          },
+        },
+      },
+    });
+
+    return ops;
+  }, []);
+
+  if (bulkOps.length) {
+    await Borrow.bulkWrite(bulkOps);
+  }
+
+  return {
+    transitionedCount: Number(statusUpdateResult?.modifiedCount || 0),
+    updatedFineCount: bulkOps.length,
+  };
+};
+
+const syncOverdueForReader = async (madocgia) => {
+  return syncOverdueStateAndFine({ madocgia });
 };
 
 const syncExpiredPickupForReader = async (madocgia) => {
@@ -128,6 +199,31 @@ const syncExpiredPickupForReader = async (madocgia) => {
 
 const syncExpiredPickup = async () => {
   return cancelExpiredApprovedBorrows();
+};
+
+const generateNextBorrowCode = async () => {
+  const existing = await Borrow.find({
+    MAPHIEU: { $regex: `^${BORROW_CODE_PREFIX}\\d+$` },
+  })
+    .select("MAPHIEU")
+    .lean();
+
+  const maxOrder = existing.reduce((max, item) => {
+    const currentCode = String(item?.MAPHIEU || "")
+      .trim()
+      .toUpperCase();
+    if (!currentCode.startsWith(BORROW_CODE_PREFIX)) return max;
+
+    const order = Number.parseInt(
+      currentCode.slice(BORROW_CODE_PREFIX.length),
+      10,
+    );
+
+    if (Number.isNaN(order)) return max;
+    return Math.max(max, order);
+  }, 0);
+
+  return `${BORROW_CODE_PREFIX}${String(maxOrder + 1).padStart(BORROW_CODE_WIDTH, "0")}`;
 };
 
 const createBorrowRequest = async (req, res) => {
@@ -201,12 +297,35 @@ const createBorrowRequest = async (req, res) => {
       });
     }
 
-    const borrow = await Borrow.create({
-      MADOCGIA: reader.MADOCGIA,
-      MASACH,
-      TRANGTHAI: "PENDING",
-      NGAYYEUCAU: new Date(),
-    });
+    let borrow = null;
+
+    for (let retry = 0; retry < 3; retry += 1) {
+      const MAPHIEU = await generateNextBorrowCode();
+
+      try {
+        borrow = await Borrow.create({
+          MAPHIEU,
+          MADOCGIA: reader.MADOCGIA,
+          MASACH,
+          TRANGTHAI: "PENDING",
+          NGAYYEUCAU: new Date(),
+        });
+        break;
+      } catch (createError) {
+        const isDuplicateBorrowCode =
+          createError?.code === 11000 && createError?.keyPattern?.MAPHIEU;
+
+        if (!isDuplicateBorrowCode || retry === 2) {
+          throw createError;
+        }
+      }
+    }
+
+    if (!borrow) {
+      return res.status(500).json({
+        message: "Không thể tạo mã phiếu mượn tự động",
+      });
+    }
 
     return res.status(201).json({
       message: "Gửi yêu cầu mượn sách thành công",
@@ -404,19 +523,34 @@ const returnBook = async (req, res) => {
     const returnedAt = new Date();
     const overdueDays = getOverdueDays(borrow.NGAYHENTRA, returnedAt);
     const fineAmount = overdueDays * DAILY_FINE_RATE;
+    const wasFinePaid =
+      String(borrow.TRANGTHAI_PHAT || "").toUpperCase() === "PAID" &&
+      Number(borrow.TIENPHAT || 0) > 0;
+
+    const resolvedOverdueDays = wasFinePaid
+      ? Number(borrow.SONGAYTRE || overdueDays)
+      : overdueDays;
+    const resolvedFineAmount = wasFinePaid
+      ? Number(borrow.TIENPHAT || fineAmount)
+      : fineAmount;
 
     borrow.TRANGTHAI = "RETURNED";
     borrow.MSNV = staff.MSNV;
     borrow.NGAYTRA = returnedAt;
-    borrow.SONGAYTRE = overdueDays;
-    borrow.TIENPHAT = fineAmount;
-    borrow.TRANGTHAI_PHAT = fineAmount > 0 ? "UNPAID" : "PAID";
+    borrow.SONGAYTRE = resolvedOverdueDays;
+    borrow.TIENPHAT = resolvedFineAmount;
+    borrow.TRANGTHAI_GIA_HAN = "NONE";
+    borrow.NGAYYEUCAU_GIA_HAN = null;
+    borrow.NGAYDUYET_GIA_HAN = null;
+    borrow.LYDO_TUCHOI_GIA_HAN = null;
+    borrow.TRANGTHAI_PHAT =
+      wasFinePaid || resolvedFineAmount <= 0 ? "PAID" : "UNPAID";
     await borrow.save();
 
-    if (fineAmount > 0) {
+    if (!wasFinePaid && resolvedFineAmount > 0) {
       await Reader.findOneAndUpdate(
         { MADOCGIA: borrow.MADOCGIA },
-        { $inc: { NO_PHAT: fineAmount } },
+        { $inc: { NO_PHAT: resolvedFineAmount } },
       );
     }
 
@@ -424,9 +558,9 @@ const returnBook = async (req, res) => {
       message: "Nhận trả sách thành công",
       borrow,
       fine: {
-        overdueDays,
+        overdueDays: resolvedOverdueDays,
         dailyRate: DAILY_FINE_RATE,
-        amount: fineAmount,
+        amount: resolvedFineAmount,
       },
     });
   } catch (error) {
@@ -502,6 +636,74 @@ const requestBorrowExtension = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       message: "Lỗi khi xin gia hạn phiếu mượn",
+      error: error.message,
+    });
+  }
+};
+
+const cancelBorrowRequestByReader = async (req, res) => {
+  try {
+    const reader = await getReaderFromAccount(req);
+    if (!reader) {
+      return res.status(403).json({ message: "Tài khoản không phải độc giả" });
+    }
+
+    const { reason } = req.body || {};
+    const cancelReason =
+      String(reason || "").trim() || "Độc giả hủy đăng ký trước khi nhận sách";
+
+    const previousBorrow = await Borrow.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        MADOCGIA: reader.MADOCGIA,
+        TRANGTHAI: { $in: ["PENDING", "APPROVED"] },
+      },
+      {
+        $set: {
+          TRANGTHAI: "CANCELLED",
+          LYDOTUCHOI: cancelReason,
+        },
+      },
+      { new: false },
+    );
+
+    if (!previousBorrow) {
+      const existingBorrow = await Borrow.findById(req.params.id).select(
+        "MADOCGIA TRANGTHAI",
+      );
+
+      if (!existingBorrow) {
+        return res.status(404).json({ message: "Không tìm thấy phiếu mượn" });
+      }
+
+      if (existingBorrow.MADOCGIA !== reader.MADOCGIA) {
+        return res
+          .status(403)
+          .json({ message: "Bạn không có quyền hủy phiếu này" });
+      }
+
+      return res.status(400).json({
+        message:
+          "Chỉ có thể hủy khi phiếu đang chờ duyệt hoặc đã duyệt nhưng chưa nhận sách",
+      });
+    }
+
+    if (previousBorrow.TRANGTHAI === "APPROVED") {
+      await Book.updateOne(
+        { MASACH: previousBorrow.MASACH, TRANGTHAI: { $ne: "DELETED" } },
+        { $inc: { SOQUYEN: 1 } },
+      );
+    }
+
+    const updatedBorrow = await Borrow.findById(req.params.id);
+
+    return res.status(200).json({
+      message: "Đã hủy đăng ký mượn sách thành công",
+      borrow: updatedBorrow,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Lỗi khi hủy đăng ký mượn",
       error: error.message,
     });
   }
@@ -809,14 +1011,7 @@ const getMyBorrowRequests = async (req, res) => {
 const getBorrows = async (req, res) => {
   try {
     await syncExpiredPickup();
-
-    await Borrow.updateMany(
-      {
-        TRANGTHAI: "BORROWING",
-        NGAYHENTRA: { $lt: new Date() },
-      },
-      { $set: { TRANGTHAI: "OVERDUE" } },
-    );
+    await syncOverdueStateAndFine();
 
     const { status } = req.query;
     const filter = {};
@@ -951,14 +1146,7 @@ const getActiveBorrows = async (req, res) => {
 const getOverdueBorrows = async (req, res) => {
   try {
     await syncExpiredPickup();
-
-    await Borrow.updateMany(
-      {
-        TRANGTHAI: "BORROWING",
-        NGAYHENTRA: { $lt: new Date() },
-      },
-      { $set: { TRANGTHAI: "OVERDUE" } },
-    );
+    await syncOverdueStateAndFine();
 
     const borrows = await Borrow.find({ TRANGTHAI: "OVERDUE" }).sort({
       NGAYHENTRA: 1,
@@ -975,17 +1163,12 @@ const syncOverdue = async (req, res) => {
   try {
     await syncExpiredPickup();
 
-    const result = await Borrow.updateMany(
-      {
-        TRANGTHAI: "BORROWING",
-        NGAYHENTRA: { $lt: new Date() },
-      },
-      { $set: { TRANGTHAI: "OVERDUE" } },
-    );
+    const result = await syncOverdueStateAndFine();
 
     return res.status(200).json({
       message: "Đồng bộ trạng thái quá hạn thành công",
-      modifiedCount: result.modifiedCount,
+      modifiedCount: result.transitionedCount,
+      updatedFineCount: result.updatedFineCount,
     });
   } catch (error) {
     return res
@@ -1000,6 +1183,7 @@ module.exports = {
   rejectBorrowRequest,
   handOverBook,
   returnBook,
+  cancelBorrowRequestByReader,
   requestBorrowExtension,
   approveBorrowExtension,
   rejectBorrowExtension,

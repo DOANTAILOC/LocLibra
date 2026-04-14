@@ -4,6 +4,7 @@ import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import BookListView from "../views/BookListView.vue";
 import BookDetailView from "../views/BookDetailView.vue";
+import AboutView from "../views/AboutView.vue";
 import MyLoansView from "../views/MyLoansView.vue";
 import MyProfileView from "../views/MyProfileView.vue";
 import AdminDashboardView from "../views/AdminDashboardView.vue";
@@ -18,6 +19,7 @@ import StaffProfileView from "../views/StaffProfileView.vue";
 
 const routes = [
   { path: "/", component: HomeView },
+  { path: "/about", component: AboutView },
   { path: "/login", component: LoginView },
   { path: "/register", component: RegisterView },
   { path: "/books", component: BookListView },
@@ -78,6 +80,9 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior() {
+    return { top: 0, left: 0, behavior: "smooth" };
+  },
 });
 
 router.beforeEach((to) => {

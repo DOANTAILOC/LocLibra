@@ -1,8 +1,8 @@
 <template>
   <main
-    class="min-h-[calc(100vh-5rem)] bg-[var(--background)] px-4 py-8 md:px-6"
+    class="min-h-[calc(100vh-5rem)] bg-[var(--background)] px-4 pt-8 pb-0 md:px-6 md:pt-8 md:pb-0 flex flex-col"
   >
-    <section class="mx-auto w-full max-w-5xl space-y-6">
+    <section class="mx-auto w-full max-w-5xl flex-1 space-y-6">
       <section
         class="rounded-2xl border border-[rgb(184_188_163/25%)] bg-[var(--surface-container-lowest)] p-6"
       >
@@ -435,6 +435,8 @@
         </div>
       </section>
     </section>
+
+    <AppFooter class="mt-6" />
   </main>
 </template>
 
@@ -453,6 +455,7 @@ import {
 import { useRouter } from "vue-router";
 import api from "../api/axios";
 import { useAuthStore } from "../stores/auth";
+import AppFooter from "../components/shared/AppFooter.vue";
 
 const router = useRouter();
 const authStore = useAuthStore();

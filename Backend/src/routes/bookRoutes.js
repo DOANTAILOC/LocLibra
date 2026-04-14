@@ -3,6 +3,7 @@ const {
   getNextBookCodePreview,
   getBooks,
   getBookById,
+  getBookBorrowStats,
   createBook,
   updateBook,
   deleteBook,
@@ -17,6 +18,7 @@ const { uploadBookCover } = require("../middlewares/uploadMiddleware");
 const router = express.Router();
 
 router.get("/", getBooks);
+router.get("/borrow-stats", getBookBorrowStats);
 router.get(
   "/next-code",
   authenticate,

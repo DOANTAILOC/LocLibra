@@ -1,5 +1,46 @@
 const Vote = require("../models/Vote");
 const Book = require("../models/Book");
+const Borrow = require("../models/Borrow");
+const Reader = require("../models/Reader");
+
+const ensureReaderCanVoteBook = async (account, masach) => {
+  if (!account?.readerId) {
+    return {
+      ok: false,
+      status: 403,
+      message: "Chi doc gia moi co the danh gia sach",
+    };
+  }
+
+  const reader = await Reader.findById(account.readerId)
+    .select("MADOCGIA")
+    .lean();
+  const readerCode = String(reader?.MADOCGIA || "").trim();
+
+  if (!readerCode) {
+    return {
+      ok: false,
+      status: 403,
+      message: "Khong tim thay thong tin doc gia",
+    };
+  }
+
+  const hasReturnedBorrow = await Borrow.exists({
+    MADOCGIA: readerCode,
+    MASACH: masach,
+    TRANGTHAI: "RETURNED",
+  });
+
+  if (!hasReturnedBorrow) {
+    return {
+      ok: false,
+      status: 403,
+      message: "Ban chi duoc danh gia sau khi da muon va tra sach",
+    };
+  }
+
+  return { ok: true };
+};
 
 const buildBookVoteSummary = async (masach) => {
   const [stats, votes] = await Promise.all([
@@ -70,6 +111,13 @@ const upsertVote = async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy sách" });
     }
 
+    const eligibility = await ensureReaderCanVoteBook(req.account, masach);
+    if (!eligibility.ok) {
+      return res
+        .status(eligibility.status)
+        .json({ message: eligibility.message });
+    }
+
     await Vote.findOneAndUpdate(
       {
         MASACH: masach,
@@ -103,6 +151,13 @@ const upsertVote = async (req, res) => {
 const deleteMyVote = async (req, res) => {
   try {
     const { masach } = req.params;
+
+    const eligibility = await ensureReaderCanVoteBook(req.account, masach);
+    if (!eligibility.ok) {
+      return res
+        .status(eligibility.status)
+        .json({ message: eligibility.message });
+    }
 
     const deleted = await Vote.findOneAndDelete({
       MASACH: masach,

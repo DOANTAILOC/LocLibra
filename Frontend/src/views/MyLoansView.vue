@@ -1,5 +1,5 @@
 <template>
-  <main class="container mx-auto px-4 py-10 md:py-12">
+  <main class="container mx-auto px-4 pt-10 pb-0 md:pt-12 md:pb-0">
     <section class="mb-6 flex flex-wrap items-start justify-between gap-4">
       <div>
         <p
@@ -146,9 +146,23 @@
                     {{ borrow.bookCode }} • {{ borrow.borrowCode }}
                   </p>
                 </div>
-                <span :class="statusClass(borrow.status)">
-                  {{ statusLabel(borrow.status) }}
-                </span>
+                <div class="flex flex-wrap items-center justify-end gap-1.5">
+                  <span :class="statusClass(borrow.status)">
+                    {{ statusLabel(borrow.status) }}
+                  </span>
+                  <span
+                    v-if="borrow.isOverdueFinePaid"
+                    class="status-chip bg-[rgb(83_99_79/18%)] text-[var(--on-primary-container)]"
+                  >
+                    PAID
+                  </span>
+                  <span
+                    v-if="borrow.isOverdueFineUnpaid"
+                    class="status-chip bg-[rgb(254_139_112/22%)] text-[var(--on-error-container)]"
+                  >
+                    UNPAID
+                  </span>
+                </div>
               </div>
 
               <div class="mt-3 grid grid-cols-2 gap-2 text-xs md:grid-cols-5">
@@ -207,7 +221,9 @@
         />
       </div>
 
-      <aside class="panel-surface h-fit p-5">
+      <aside
+        class="panel-surface h-fit p-5 xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto"
+      >
         <template v-if="selectedBorrow">
           <p
             class="text-[10px] font-bold tracking-[0.1em] text-[var(--on-surface-variant)] uppercase"
@@ -222,15 +238,29 @@
           </p>
 
           <div class="mt-4 flex items-center justify-between">
-            <span :class="statusClass(selectedBorrow.status)">
-              {{ statusLabel(selectedBorrow.status) }}
-            </span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span :class="statusClass(selectedBorrow.status)">
+                {{ statusLabel(selectedBorrow.status) }}
+              </span>
+              <span
+                v-if="selectedBorrow.isOverdueFinePaid"
+                class="status-chip bg-[rgb(83_99_79/18%)] text-[var(--on-primary-container)]"
+              >
+                PAID
+              </span>
+              <span
+                v-if="selectedBorrow.isOverdueFineUnpaid"
+                class="status-chip bg-[rgb(254_139_112/22%)] text-[var(--on-error-container)]"
+              >
+                UNPAID
+              </span>
+            </div>
             <p class="text-xs text-[var(--on-surface-variant)]">
               Cập nhật: {{ formatDateTime(selectedBorrow.updatedAt) }}
             </p>
           </div>
 
-          <div class="mt-5 space-y-3 text-sm">
+          <div class="mt-5 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
             <div
               v-for="item in timelineItems(selectedBorrow)"
               :key="item.label"
@@ -263,6 +293,17 @@
           </div>
 
           <div class="mt-4 space-y-2">
+            <button
+              v-if="canCancelSelectedBorrow"
+              type="button"
+              class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[rgb(254_139_112/45%)] bg-[rgb(254_139_112/12%)] py-2.5 text-xs font-bold text-[var(--on-error-container)] transition hover:bg-[rgb(254_139_112/20%)] disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="isCancelling"
+              @click="cancelSelectedBorrowRegistration"
+            >
+              <span class="material-symbols-outlined text-sm">close</span>
+              {{ cancelBorrowButtonLabel }}
+            </button>
+
             <button
               type="button"
               class="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] py-2.5 text-xs font-bold text-[var(--on-primary)] disabled:cursor-not-allowed disabled:opacity-60"
@@ -310,6 +351,68 @@
           </div>
 
           <div
+            v-if="canVoteSelectedBorrow"
+            class="mt-5 rounded-lg border border-[var(--outline-variant)] bg-[var(--surface-container-low)] p-3"
+          >
+            <p
+              class="text-[10px] font-bold tracking-[0.08em] text-[var(--on-surface-variant)] uppercase"
+            >
+              Đánh giá sách đã trả
+            </p>
+
+            <div class="mt-2 flex items-center gap-2">
+              <button
+                v-for="star in 5"
+                :key="`borrow-vote-${star}`"
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-full transition"
+                :class="
+                  star <= selectedScore
+                    ? 'bg-amber-100 text-amber-600'
+                    : 'bg-[var(--surface-container-lowest)] text-[var(--outline)] hover:bg-amber-50'
+                "
+                :disabled="voting"
+                @click="selectedScore = star"
+              >
+                <span
+                  class="material-symbols-outlined text-[18px]"
+                  :class="{ 'material-symbols-filled': star <= selectedScore }"
+                >
+                  {{ star <= selectedScore ? "star" : "star_outline" }}
+                </span>
+              </button>
+            </div>
+
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="btn-primary px-4 py-2 text-[11px]"
+                :disabled="voting || selectedScore < 1"
+                @click="submitVoteForSelectedBorrow"
+              >
+                {{ myVoteScore ? "Cập nhật đánh giá" : "Gửi đánh giá" }}
+              </button>
+
+              <button
+                v-if="myVoteScore"
+                type="button"
+                class="btn-secondary px-4 py-2 text-[11px]"
+                :disabled="voting"
+                @click="removeVoteForSelectedBorrow"
+              >
+                Hủy vote
+              </button>
+            </div>
+
+            <p
+              v-if="voteMessage"
+              class="mt-2 text-xs text-[var(--on-surface-variant)]"
+            >
+              {{ voteMessage }}
+            </p>
+          </div>
+
+          <div
             v-if="selectedBorrow.rejectReason"
             class="mt-5 rounded-lg border border-[rgb(254_139_112/45%)] bg-[rgb(254_139_112/15%)] p-3 text-sm text-[var(--on-error-container)]"
           >
@@ -319,6 +422,46 @@
         </template>
       </aside>
     </section>
+
+    <AppFooter class="mt-6" />
+
+    <div
+      v-if="extensionSuccessModalOpen"
+      class="fixed inset-0 z-[85] flex items-center justify-center bg-black/45 px-4 py-6"
+      @click.self="closeExtensionSuccessModal"
+    >
+      <div
+        class="w-full max-w-md overflow-hidden rounded-2xl border border-[var(--outline-variant)] bg-white shadow-2xl"
+      >
+        <div
+          class="border-b border-[var(--outline-variant)] bg-[var(--surface-container-low)] px-5 py-4"
+        >
+          <h3 class="text-lg font-bold text-[var(--on-surface)]">
+            Thông báo gia hạn
+          </h3>
+        </div>
+
+        <div class="px-5 py-5">
+          <p
+            class="rounded-lg border border-[rgb(126_197_112/45%)] bg-[rgb(126_197_112/12%)] px-3 py-3 text-sm leading-relaxed text-[rgb(41_88_31)]"
+          >
+            {{ extensionSuccessModalMessage }}
+          </p>
+        </div>
+
+        <div
+          class="flex justify-end border-t border-[var(--outline-variant)] px-5 py-4"
+        >
+          <button
+            type="button"
+            class="btn-primary px-4 py-2 text-xs sm:min-w-[110px]"
+            @click="closeExtensionSuccessModal"
+          >
+            Đã hiểu
+          </button>
+        </div>
+      </div>
+    </div>
   </main>
 </template>
 
@@ -326,15 +469,25 @@
 import { computed, onMounted, ref, watch } from "vue";
 import api from "../api/axios";
 import PaginationBar from "../components/shared/PaginationBar.vue";
+import AppFooter from "../components/shared/AppFooter.vue";
+import { useAuthStore } from "../stores/auth";
 
+const authStore = useAuthStore();
 const loading = ref(false);
 const isExtending = ref(false);
+const isCancelling = ref(false);
+const voting = ref(false);
 const errorMessage = ref("");
 const successMessage = ref("");
+const voteMessage = ref("");
 const searchText = ref("");
 const selectedStatus = ref("ALL");
 const borrows = ref([]);
 const selectedBorrowId = ref("");
+const selectedScore = ref(0);
+const myVoteScore = ref(0);
+const extensionSuccessModalOpen = ref(false);
+const extensionSuccessModalMessage = ref("");
 const pageSize = 10;
 const currentPage = ref(1);
 
@@ -363,9 +516,7 @@ const availableStatuses = computed(() => {
 const normalizedBorrows = computed(() => {
   return borrows.value.map((item) => ({
     id: item._id || `${item.MASACH}-${item.NGAYYEUCAU || ""}`,
-    borrowCode: item._id
-      ? `PM-${String(item._id).slice(-6).toUpperCase()}`
-      : "PM-NA",
+    borrowCode: String(item?.MAPHIEU || "").trim() || "PM-NA",
     bookCode: item?.SACH?.MASACH || item.MASACH || "Không rõ",
     bookTitle: item?.SACH?.TENSACH || "Sách không còn trong hệ thống",
     bookAuthors: Array.isArray(item?.SACH?.TACGIA) ? item.SACH.TACGIA : [],
@@ -383,6 +534,22 @@ const normalizedBorrows = computed(() => {
     overdueDays: Number(item.SONGAYTRE || 0),
     fineAmount: Number(item.TIENPHAT || 0),
     fineStatus: item.TRANGTHAI_PHAT || "PAID",
+    isOverdueFinePaid:
+      ["RETURNED", "LOST"].includes(
+        String(item.TRANGTHAI || "").toUpperCase(),
+      ) &&
+      (String(item.TRANGTHAI || "").toUpperCase() !== "RETURNED" ||
+        Number(item.SONGAYTRE || 0) > 0) &&
+      Number(item.TIENPHAT || 0) > 0 &&
+      String(item.TRANGTHAI_PHAT || "").toUpperCase() === "PAID",
+    isOverdueFineUnpaid:
+      ["RETURNED", "LOST"].includes(
+        String(item.TRANGTHAI || "").toUpperCase(),
+      ) &&
+      (String(item.TRANGTHAI || "").toUpperCase() !== "RETURNED" ||
+        Number(item.SONGAYTRE || 0) > 0) &&
+      Number(item.TIENPHAT || 0) > 0 &&
+      String(item.TRANGTHAI_PHAT || "").toUpperCase() === "UNPAID",
     extensionCount: Number(item.SO_LAN_GIA_HAN || 0),
     extensionRequestStatus: item.TRANGTHAI_GIA_HAN || "NONE",
     extensionRequestDate: item.NGAYYEUCAU_GIA_HAN || null,
@@ -403,6 +570,11 @@ const canRequestExtension = computed(() => {
   const dueDate = new Date(selectedBorrow.value.dueDate);
   if (Number.isNaN(dueDate.getTime())) return false;
   return dueDate.getTime() > Date.now();
+});
+
+const canCancelSelectedBorrow = computed(() => {
+  if (!selectedBorrow.value) return false;
+  return ["PENDING", "APPROVED"].includes(selectedBorrow.value.status);
 });
 
 const filteredBorrows = computed(() => {
@@ -458,6 +630,17 @@ const selectedBorrow = computed(() => {
   );
 });
 
+const currentAccountId = computed(() => authStore.user?.account?.id || "");
+
+const canVoteSelectedBorrow = computed(() => {
+  return (
+    !!selectedBorrow.value &&
+    selectedBorrow.value.status === "RETURNED" &&
+    !!selectedBorrow.value.bookCode &&
+    selectedBorrow.value.bookCode !== "Không rõ"
+  );
+});
+
 const statCards = computed(() => {
   const byStatus = normalizedBorrows.value.reduce((acc, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
@@ -497,6 +680,10 @@ watch([searchText, selectedStatus], () => {
   currentPage.value = 1;
 });
 
+watch(selectedBorrow, () => {
+  fetchVoteForSelectedBorrow();
+});
+
 function goToPage(page) {
   const pageNumber = Number(page);
   if (!Number.isInteger(pageNumber)) return;
@@ -518,6 +705,14 @@ const extensionButtonLabel = computed(() => {
   }
 
   return "Gửi yêu cầu gia hạn 1 tuần";
+});
+
+const cancelBorrowButtonLabel = computed(() => {
+  if (isCancelling.value) return "Đang hủy đăng ký...";
+  if (selectedBorrow.value?.status === "APPROVED") {
+    return "Hủy đăng ký nhận sách";
+  }
+  return "Hủy yêu cầu mượn";
 });
 
 function parseBorrowResponse(payload) {
@@ -629,9 +824,12 @@ function timelineItems(item) {
       value: formatDateTime(item.extensionApprovedDate),
     },
     { label: "Ngày trả", value: formatDateTime(item.returnedDate) },
-    { label: "Gia hạn gần nhất", value: formatDateTime(item.lastExtendedAt) },
     { label: "Tiền phạt", value: formatCurrency(item.fineAmount) },
   ];
+}
+
+function closeExtensionSuccessModal() {
+  extensionSuccessModalOpen.value = false;
 }
 
 async function requestExtension() {
@@ -646,6 +844,9 @@ async function requestExtension() {
       `/borrows/${selectedBorrow.value.id}/extend`,
     );
     successMessage.value = data?.message || "Đã gửi yêu cầu gia hạn";
+    extensionSuccessModalMessage.value =
+      data?.message || "Đã gửi yêu cầu gia hạn thành công.";
+    extensionSuccessModalOpen.value = true;
     await fetchMyBorrows();
   } catch (error) {
     errorMessage.value =
@@ -653,6 +854,97 @@ async function requestExtension() {
       "Không thể xin gia hạn phiếu mượn lúc này.";
   } finally {
     isExtending.value = false;
+  }
+}
+
+async function cancelSelectedBorrowRegistration() {
+  if (!selectedBorrow.value || !canCancelSelectedBorrow.value) return;
+
+  const isConfirmed = window.confirm(
+    "Bạn có chắc chắn muốn hủy đăng ký mượn cho phiếu này?",
+  );
+  if (!isConfirmed) return;
+
+  isCancelling.value = true;
+  errorMessage.value = "";
+  successMessage.value = "";
+
+  try {
+    const { data } = await api.patch(
+      `/borrows/${selectedBorrow.value.id}/cancel`,
+    );
+    successMessage.value = data?.message || "Đã hủy đăng ký mượn";
+    await fetchMyBorrows();
+  } catch (error) {
+    errorMessage.value =
+      error?.response?.data?.message ||
+      "Không thể hủy đăng ký mượn vào lúc này.";
+  } finally {
+    isCancelling.value = false;
+  }
+}
+
+async function fetchVoteForSelectedBorrow() {
+  voteMessage.value = "";
+  selectedScore.value = 0;
+  myVoteScore.value = 0;
+
+  if (!canVoteSelectedBorrow.value) return;
+
+  try {
+    const { data } = await api.get(
+      `/votes/books/${selectedBorrow.value.bookCode}`,
+    );
+    const voters = Array.isArray(data?.voters) ? data.voters : [];
+    const mine = voters.find(
+      (item) =>
+        String(item?.accountId || "") === String(currentAccountId.value),
+    );
+
+    myVoteScore.value = Number(mine?.score || 0);
+    selectedScore.value = myVoteScore.value;
+  } catch {
+    myVoteScore.value = 0;
+    selectedScore.value = 0;
+  }
+}
+
+async function submitVoteForSelectedBorrow() {
+  if (!canVoteSelectedBorrow.value || selectedScore.value < 1) return;
+
+  voting.value = true;
+  voteMessage.value = "";
+
+  try {
+    await api.post(`/votes/books/${selectedBorrow.value.bookCode}`, {
+      score: selectedScore.value,
+    });
+    myVoteScore.value = selectedScore.value;
+    voteMessage.value = "Đã lưu đánh giá của bạn.";
+  } catch (error) {
+    voteMessage.value =
+      error?.response?.data?.message || "Không thể gửi đánh giá lúc này.";
+  } finally {
+    voting.value = false;
+  }
+}
+
+async function removeVoteForSelectedBorrow() {
+  if (!canVoteSelectedBorrow.value || !myVoteScore.value) return;
+
+  voting.value = true;
+  voteMessage.value = "";
+
+  try {
+    await api.delete(`/votes/books/${selectedBorrow.value.bookCode}`);
+    myVoteScore.value = 0;
+    selectedScore.value = 0;
+    voteMessage.value = "Đã hủy đánh giá.";
+  } catch (error) {
+    voteMessage.value =
+      error?.response?.data?.message || "Không thể hủy đánh giá lúc này.";
+  } finally {
+    voting.value = false;
   }
 }
 

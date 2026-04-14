@@ -16,7 +16,7 @@
     <main class="flex min-h-screen flex-1 flex-col lg:ml-72">
       <AdminTopHeader @open-menu="mobileMenuOpen = true" />
 
-      <div class="flex flex-1 overflow-hidden">
+      <div class="flex flex-1">
         <section class="flex-1 overflow-y-auto px-4 py-8 md:px-8">
           <AdminPageHero :title="title" :description="description">
             <template #actions>
@@ -108,7 +108,22 @@
                   :key="`${item._id}-${column.key}`"
                   class="px-4 py-4 text-sm"
                 >
-                  {{ item[column.key] || "---" }}
+                  <div
+                    v-if="
+                      isImageField(column) &&
+                      resolveImageValue(item, column.key)
+                    "
+                    class="mx-auto h-11 w-11 overflow-hidden rounded-full border border-[rgb(184_188_163/35%)]"
+                  >
+                    <img
+                      :src="resolveImageValue(item, column.key)"
+                      :alt="column.imageAlt || column.label"
+                      class="h-full w-full object-cover"
+                    />
+                  </div>
+                  <span v-else>
+                    {{ item[column.key] || "---" }}
+                  </span>
                 </td>
                 <td v-if="canManage" class="px-6 py-4 text-right">
                   <div
@@ -167,7 +182,18 @@
                 {{ field.label }}
               </p>
               <p class="text-xs font-bold">
-                {{ selectedEntity[field.key] || "---" }}
+                <img
+                  v-if="
+                    isImageField(field) &&
+                    resolveImageValue(selectedEntity, field.key)
+                  "
+                  :src="resolveImageValue(selectedEntity, field.key)"
+                  :alt="field.imageAlt || field.label"
+                  class="h-24 w-24 rounded-full border border-[rgb(184_188_163/35%)] object-cover"
+                />
+                <span v-else>
+                  {{ selectedEntity[field.key] || "---" }}
+                </span>
               </p>
             </div>
 
@@ -240,10 +266,31 @@
             <textarea
               v-else-if="field.type === 'textarea'"
               v-model.trim="formData[field.key]"
-              class="form-input min-h-[90px]"
+              :class="['form-input', field.textareaClass || 'min-h-[90px]']"
               :required="isFieldRequired(field)"
               :placeholder="field.placeholder || ''"
             ></textarea>
+            <div v-else-if="isImageField(field)" class="space-y-2">
+              <div
+                v-if="getImagePreview(field.key)"
+                class="inline-flex h-24 w-24 overflow-hidden rounded-full border border-[rgb(184_188_163/35%)] bg-[var(--surface-container-low)]"
+              >
+                <img
+                  :src="getImagePreview(field.key)"
+                  :alt="field.imageAlt || field.label"
+                  class="h-full w-full object-cover"
+                />
+              </div>
+              <input
+                type="file"
+                class="form-input"
+                accept="image/*"
+                :required="
+                  isFieldRequired(field) && !getImagePreview(field.key)
+                "
+                @change="onImageSelected(field, $event)"
+              />
+            </div>
             <input
               v-else
               v-model.trim="formData[field.key]"
@@ -279,11 +326,59 @@
         </form>
       </div>
     </div>
+
+    <div v-if="showCropperModal" class="fixed inset-0 z-[90] bg-[#070a12]/95">
+      <div class="mx-auto flex h-full w-full max-w-[520px] flex-col px-4 py-6">
+        <div class="mb-4 flex items-center justify-between text-white">
+          <h3 class="text-lg font-semibold tracking-tight">Cắt ảnh avatar</h3>
+        </div>
+
+        <div class="flex flex-1 items-center justify-center">
+          <div
+            class="relative aspect-square w-full max-w-[420px] overflow-hidden rounded-2xl bg-[#0b1020]"
+          >
+            <img
+              ref="cropperImageRef"
+              :src="selectedImageSrc"
+              alt="Crop avatar"
+              class="block max-w-full"
+              @load="initCropper"
+            />
+          </div>
+        </div>
+
+        <div class="mt-5 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            class="rounded-full border border-[rgb(184_188_163/45%)] bg-[var(--surface-container-low)] px-5 py-2 text-xs font-bold tracking-[0.08em] text-[var(--on-surface)] uppercase transition hover:border-[var(--primary)]"
+            @click="closeCropperModal"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            class="rounded-full bg-[var(--primary)] px-5 py-2 text-xs font-bold tracking-[0.08em] text-[var(--on-primary)] uppercase transition hover:brightness-95"
+            @click="applyCroppedImage"
+          >
+            Dùng ảnh này
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import Cropper from "cropperjs";
+import "cropperjs/dist/cropper.css";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import api from "../../api/axios";
 import AdminSidebar from "./AdminSidebar.vue";
 import AdminDetailAside from "./shared/AdminDetailAside.vue";
@@ -334,7 +429,14 @@ const currentPage = ref(1);
 const showModal = ref(false);
 const mode = ref("create");
 const formData = ref({});
+const formFiles = ref({});
+const imagePreviews = ref({});
 const autoCodePreview = ref("");
+const showCropperModal = ref(false);
+const cropperImageRef = ref(null);
+const selectedImageSrc = ref("");
+const selectedCropFieldKey = ref("");
+let cropperInstance = null;
 
 const resolvedDetailFields = computed(() => {
   if (props.detailFields.length > 0) return props.detailFields;
@@ -347,6 +449,7 @@ const filteredEntities = computed(() => {
 
   return entities.value.filter((item) => {
     return props.columns
+      .filter((column) => !isImageField(column))
       .map((column) => String(item[column.key] || ""))
       .join(" ")
       .toLowerCase()
@@ -412,6 +515,123 @@ const resetFormData = () => {
     payload[field.key] = "";
   });
   formData.value = payload;
+  formFiles.value = {};
+  imagePreviews.value = {};
+};
+
+const isImageField = (field) => {
+  return field?.type === "image";
+};
+
+const resolveImageValue = (item, key) => {
+  return String(item?.[key] || "").trim();
+};
+
+const getImagePreview = (key) => {
+  return String(imagePreviews.value[key] || "").trim();
+};
+
+const revokeObjectPreview = (key) => {
+  const preview = imagePreviews.value[key];
+  if (typeof preview === "string" && preview.startsWith("blob:")) {
+    URL.revokeObjectURL(preview);
+  }
+};
+
+const clearImagePreviews = () => {
+  Object.keys(imagePreviews.value).forEach((key) => {
+    revokeObjectPreview(key);
+  });
+};
+
+const destroyCropper = () => {
+  if (!cropperInstance) return;
+  cropperInstance.destroy();
+  cropperInstance = null;
+};
+
+const initCropper = () => {
+  if (!showCropperModal.value || !cropperImageRef.value) return;
+
+  destroyCropper();
+  cropperInstance = new Cropper(cropperImageRef.value, {
+    aspectRatio: 1,
+    viewMode: 1,
+    autoCropArea: 0.9,
+    dragMode: "move",
+    responsive: true,
+    background: false,
+    guides: false,
+    center: true,
+    highlight: true,
+    movable: true,
+    zoomable: true,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    scalable: false,
+    rotatable: false,
+  });
+};
+
+const closeCropperModal = () => {
+  showCropperModal.value = false;
+  destroyCropper();
+
+  if (selectedImageSrc.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(selectedImageSrc.value);
+  }
+
+  selectedImageSrc.value = "";
+  selectedCropFieldKey.value = "";
+};
+
+const applyCroppedImage = async () => {
+  if (!cropperInstance || !selectedCropFieldKey.value) return;
+
+  const canvas = cropperInstance.getCroppedCanvas({
+    width: 600,
+    height: 600,
+    imageSmoothingQuality: "high",
+  });
+  if (!canvas) return;
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/png", 0.95);
+  });
+
+  if (!blob) {
+    errorMessage.value = "Không thể xử lý ảnh đã cắt";
+    return;
+  }
+
+  const key = selectedCropFieldKey.value;
+  const croppedFile = new File([blob], `avatar-${Date.now()}.png`, {
+    type: "image/png",
+  });
+
+  revokeObjectPreview(key);
+  formFiles.value[key] = croppedFile;
+  imagePreviews.value[key] = URL.createObjectURL(blob);
+  closeCropperModal();
+};
+
+const onImageSelected = (field, event) => {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+
+  if (!String(file.type || "").startsWith("image/")) {
+    errorMessage.value = "Vui lòng chọn tệp ảnh hợp lệ";
+    return;
+  }
+
+  const key = field.key;
+  if (selectedImageSrc.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(selectedImageSrc.value);
+  }
+
+  selectedCropFieldKey.value = key;
+  selectedImageSrc.value = URL.createObjectURL(file);
+  showCropperModal.value = true;
 };
 
 const normalizeError = (error) => {
@@ -495,8 +715,13 @@ const openEditModal = (item) => {
 
   mode.value = "edit";
   formData.value = {};
+  formFiles.value = {};
+  imagePreviews.value = {};
   props.formFields.forEach((field) => {
     formData.value[field.key] = item[field.key] || "";
+    if (isImageField(field) && item[field.key]) {
+      imagePreviews.value[field.key] = String(item[field.key]);
+    }
   });
   selectedEntity.value = item;
   showModal.value = true;
@@ -504,6 +729,8 @@ const openEditModal = (item) => {
 };
 
 const closeModal = () => {
+  closeCropperModal();
+  clearImagePreviews();
   showModal.value = false;
   resetFormData();
 };
@@ -515,15 +742,42 @@ const handleSubmit = async () => {
 
   try {
     const payload = { ...formData.value };
+    const imageFields = props.formFields.filter((field) => isImageField(field));
+    imageFields.forEach((field) => {
+      delete payload[field.key];
+    });
+
     if (props.autoCodeFieldKey) {
       delete payload[props.autoCodeFieldKey];
     }
 
+    const hasImageFile = imageFields.some(
+      (field) => formFiles.value[field.key],
+    );
+
+    const requestBody = hasImageFile
+      ? (() => {
+          const formPayload = new FormData();
+          Object.entries(payload).forEach(([key, value]) => {
+            formPayload.append(key, value == null ? "" : String(value));
+          });
+          imageFields.forEach((field) => {
+            const file = formFiles.value[field.key];
+            if (!file) return;
+            formPayload.append(field.uploadKey || "avatar", file);
+          });
+          return formPayload;
+        })()
+      : payload;
+
     if (mode.value === "edit" && selectedEntity.value?._id) {
-      await api.put(`${props.endpoint}/${selectedEntity.value._id}`, payload);
+      await api.put(
+        `${props.endpoint}/${selectedEntity.value._id}`,
+        requestBody,
+      );
       successMessage.value = `Cập nhật ${props.entityName} thành công`;
     } else {
-      await api.post(props.endpoint, payload);
+      await api.post(props.endpoint, requestBody);
       successMessage.value = `Thêm ${props.entityName} thành công`;
     }
 
@@ -562,5 +816,19 @@ const handleDelete = async (item) => {
 onMounted(async () => {
   resetFormData();
   await fetchEntities();
+});
+
+onBeforeUnmount(() => {
+  closeCropperModal();
+  clearImagePreviews();
+});
+
+watch(showCropperModal, async (isOpen) => {
+  if (!isOpen) return;
+
+  await nextTick();
+  if (cropperImageRef.value?.complete) {
+    initCropper();
+  }
 });
 </script>

@@ -17,20 +17,24 @@
         <RouterLink
           to="/"
           :class="navItemClass(route.path === '/' && !route.hash)"
+          @click="scrollToTop"
         >
           Trang Chủ
         </RouterLink>
 
         <RouterLink
-          :to="{ path: '/', hash: '#about-us' }"
-          :class="
-            navItemClass(route.path === '/' && route.hash === '#about-us')
-          "
+          to="/about"
+          :class="navItemClass(route.path === '/about')"
+          @click="scrollToTop"
         >
           Về chúng tôi
         </RouterLink>
 
-        <RouterLink to="/books" :class="navItemClass(route.path === '/books')">
+        <RouterLink
+          to="/books"
+          :class="navItemClass(route.path === '/books')"
+          @click="scrollToTop"
+        >
           Kho Sách
         </RouterLink>
 
@@ -46,6 +50,7 @@
           v-if="authStore.isAdmin"
           to="/admin"
           :class="navItemClass(route.path.startsWith('/admin'))"
+          @click="scrollToTop"
         >
           Quản trị
         </RouterLink>
@@ -224,7 +229,14 @@ function goToMyLoans(event) {
   if (!authStore.isLoggedIn) {
     event.preventDefault();
     window.alert("Vui lòng đăng nhập để xem mục Mượn của tôi.");
+    return;
   }
+
+  scrollToTop();
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 onMounted(() => {

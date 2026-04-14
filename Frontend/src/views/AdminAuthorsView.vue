@@ -26,6 +26,7 @@ import { useAuthStore } from "../stores/auth";
 const authStore = useAuthStore();
 
 const columns = [
+  { key: "AVATAR_URL", label: "Ảnh", type: "image", imageAlt: "Tác giả" },
   { key: "MATG", label: "Mã tác giả" },
   { key: "Hoten", label: "Tác giả" },
   { key: "QuocTich", label: "Quốc tịch" },
@@ -33,6 +34,14 @@ const columns = [
 ];
 
 const formFields = [
+  {
+    key: "AVATAR_URL",
+    label: "Avatar tác giả",
+    type: "image",
+    uploadKey: "avatar",
+    placeholder: "Chọn ảnh đại diện",
+    fullWidth: true,
+  },
   { key: "MATG", label: "Mã tác giả", placeholder: "Tự động sinh" },
   {
     key: "Hoten",
@@ -46,10 +55,13 @@ const formFields = [
     label: "Tiểu sử",
     type: "textarea",
     placeholder: "Thông tin giới thiệu",
+    textareaClass: "min-h-[180px]",
+    fullWidth: true,
   },
 ];
 
 const detailFields = [
+  { key: "AVATAR_URL", label: "Avatar", type: "image", imageAlt: "Tác giả" },
   { key: "MATG", label: "Mã tác giả" },
   { key: "Hoten", label: "Họ tên" },
   { key: "QuocTich", label: "Quốc tịch" },

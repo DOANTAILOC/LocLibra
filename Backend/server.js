@@ -8,6 +8,7 @@ const authRoutes = require("./src/routes/authRoutes");
 const borrowRoutes = require("./src/routes/borrowRoutes");
 const voteRoutes = require("./src/routes/voteRoutes");
 const adminRoutes = require("./src/routes/adminRoutes");
+const publicMetaRoutes = require("./src/routes/publicMetaRoutes");
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/borrows", borrowRoutes);
 app.use("/api/votes", voteRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/meta", publicMetaRoutes);
 
 app.get("/", (req, res) => {
   res.json({ message: "Library API is running" });

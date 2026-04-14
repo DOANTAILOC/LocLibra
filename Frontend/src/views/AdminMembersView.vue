@@ -20,7 +20,7 @@
         @open-menu="mobileMenuOpen = true"
       />
 
-      <div class="flex flex-1 overflow-hidden">
+      <div class="flex flex-1">
         <section class="flex-1 overflow-y-auto px-4 py-8 md:px-8">
           <AdminPageHero
             title="Quản lý Thành viên"

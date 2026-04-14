@@ -20,7 +20,7 @@
         @open-menu="mobileMenuOpen = true"
       />
 
-      <div class="flex flex-1 overflow-hidden">
+      <div class="flex flex-1">
         <section class="flex-1 overflow-y-auto px-4 py-8 md:px-8">
           <AdminPageHero
             title="Quản lý Mượn Sách"
@@ -195,10 +195,24 @@
                   </p>
                 </td>
                 <td class="px-4 py-4 text-center">
-                  <StatusChip
-                    :label="loan.statusLabel"
-                    :custom-class="statusChipClass(loan.displayStatus)"
-                  />
+                  <div
+                    class="flex flex-wrap items-center justify-center gap-1.5"
+                  >
+                    <StatusChip
+                      :label="loan.statusLabel"
+                      :custom-class="statusChipClass(loan.displayStatus)"
+                    />
+                    <StatusChip
+                      v-if="loan.isOverdueFinePaid"
+                      label="PAID"
+                      custom-class="bg-[rgb(83_99_79/18%)] text-[var(--on-primary-container)]"
+                    />
+                    <StatusChip
+                      v-if="loan.isOverdueFineUnpaid"
+                      label="UNPAID"
+                      custom-class="bg-[rgb(254_139_112/22%)] text-[var(--on-error-container)]"
+                    />
+                  </div>
                 </td>
                 <td class="px-6 py-4 text-right">
                   <div
@@ -210,9 +224,9 @@
                       :disabled="isMutating"
                       @click.stop="runPrimaryAction(loan)"
                     >
-                      <span class="material-symbols-outlined text-[18px]"
-                        >bolt</span
-                      >
+                      <span class="material-symbols-outlined text-[18px]">{{
+                        primaryActionIcon(loan)
+                      }}</span>
                     </button>
                     <button
                       type="button"
@@ -264,14 +278,27 @@
             </p>
             <div class="mt-3 flex items-center justify-between text-xs">
               <span class="text-[var(--on-surface-variant)]">Trạng thái</span>
-              <StatusChip
-                :label="selectedLoan.statusLabel"
-                :custom-class="statusChipClass(selectedLoan.displayStatus)"
-              />
+              <div class="flex flex-wrap items-center justify-end gap-1.5">
+                <StatusChip
+                  :label="selectedLoan.statusLabel"
+                  :custom-class="statusChipClass(selectedLoan.displayStatus)"
+                />
+                <StatusChip
+                  v-if="selectedLoan.isOverdueFinePaid"
+                  label="PAID"
+                  custom-class="bg-[rgb(83_99_79/18%)] text-[var(--on-primary-container)]"
+                />
+                <StatusChip
+                  v-if="selectedLoan.isOverdueFineUnpaid"
+                  label="UNPAID"
+                  custom-class="bg-[rgb(254_139_112/22%)] text-[var(--on-error-container)]"
+                />
+              </div>
             </div>
             <p class="mt-2 text-[11px] text-[var(--on-surface-variant)]">
-              Luồng trạng thái: Chờ duyệt -> Đã duyệt -> Đang mượn/Quá hạn -> Đã
-              trả
+              Luồng trạng thái: Đăng ký mượn (Chờ duyệt) -> Duyệt phiếu -> Giao
+              sách (Đang mượn) -> Quá hạn (nếu trễ hạn) -> Đã trả. Nhánh khác:
+              Từ chối, Đã hủy, Mất sách.
             </p>
           </div>
 
@@ -321,9 +348,45 @@
                   <p
                     class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
                   >
-                    Mượn
+                    Đăng ký mượn
                   </p>
-                  <p class="text-xs font-bold">{{ selectedLoan.borrowedAt }}</p>
+                  <p class="text-xs font-bold">
+                    {{ selectedLoan.requestedAt }}
+                  </p>
+                </div>
+                <div
+                  class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
+                >
+                  <p
+                    class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
+                  >
+                    Ngày duyệt
+                  </p>
+                  <p class="text-xs font-bold">{{ selectedLoan.approvedAt }}</p>
+                </div>
+                <div
+                  class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
+                >
+                  <p
+                    class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
+                  >
+                    Ngày giao sách
+                  </p>
+                  <p class="text-xs font-bold">
+                    {{ selectedLoan.handedOverAt }}
+                  </p>
+                </div>
+                <div
+                  class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
+                >
+                  <p
+                    class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
+                  >
+                    Hạn nhận sách
+                  </p>
+                  <p class="text-xs font-bold">
+                    {{ selectedLoan.pickupDeadline }}
+                  </p>
                 </div>
                 <div
                   class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
@@ -344,6 +407,61 @@
                     {{ selectedLoan.dueAt }}
                   </p>
                 </div>
+                <div
+                  class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
+                >
+                  <p
+                    class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
+                  >
+                    Ngày trả sách
+                  </p>
+                  <p class="text-xs font-bold">{{ selectedLoan.returnedAt }}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p
+                class="mb-2 text-[11px] font-bold tracking-wider text-[var(--on-surface-variant)] uppercase"
+              >
+                Phạt quá hạn
+              </p>
+              <div class="grid grid-cols-2 gap-3">
+                <div
+                  class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
+                >
+                  <p
+                    class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
+                  >
+                    Tiền phạt
+                  </p>
+                  <p class="text-xs font-bold text-[var(--on-surface)]">
+                    {{ formatCurrency(selectedLoan.fineAmount) }}
+                  </p>
+                </div>
+                <div
+                  class="rounded-xl bg-[var(--surface-container-lowest)] p-3 shadow-sm"
+                >
+                  <p
+                    class="text-[10px] font-bold text-[var(--on-surface-variant)] uppercase"
+                  >
+                    Trạng thái phạt
+                  </p>
+                  <p
+                    class="text-xs font-bold"
+                    :class="
+                      selectedLoan.fineStatus === 'UNPAID'
+                        ? 'text-[var(--error)]'
+                        : 'text-[var(--on-primary-container)]'
+                    "
+                  >
+                    {{
+                      selectedLoan.fineStatus === "UNPAID"
+                        ? "Chưa thanh toán"
+                        : "Đã thanh toán"
+                    }}
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -356,17 +474,20 @@
               <div class="space-y-2">
                 <div
                   v-for="book in selectedLoan.books"
-                  :key="book.title"
+                  :key="`${book.code}-${book.title}`"
                   class="flex items-center gap-3 rounded-lg p-2 transition hover:bg-[var(--surface-container-lowest)]"
                 >
-                  <div
-                    class="flex h-10 w-8 items-center justify-center rounded bg-[var(--secondary-container)]"
-                  >
-                    <span class="material-symbols-outlined text-xs">book</span>
-                  </div>
+                  <img
+                    :src="book.cover || resolveBookCover(selectedLoan)"
+                    :alt="book.title"
+                    class="h-12 w-9 rounded border border-[var(--outline-variant)] object-cover"
+                  />
                   <div class="overflow-hidden">
                     <p class="truncate text-[11px] font-bold">
                       {{ book.title }}
+                    </p>
+                    <p class="text-[10px] text-[var(--on-surface-variant)]">
+                      {{ book.code }}
                     </p>
                     <p class="text-[9px]" :class="book.noteClass">
                       {{ book.note }}
@@ -383,7 +504,9 @@
                 :disabled="!nextAction || isMutating"
                 @click="runPrimaryAction(selectedLoan)"
               >
-                <span class="material-symbols-outlined text-sm">autorenew</span>
+                <span class="material-symbols-outlined text-sm">{{
+                  nextActionIcon
+                }}</span>
                 {{ nextActionLabel }}
               </button>
               <button
@@ -392,7 +515,7 @@
                 :disabled="!canReject || isMutating"
                 @click="rejectSelected"
               >
-                <span class="material-symbols-outlined text-sm">block</span>
+                <span class="material-symbols-outlined text-sm">cancel</span>
                 Từ chối phiếu
               </button>
               <button
@@ -402,7 +525,7 @@
                 @click="approveExtensionSelected"
               >
                 <span class="material-symbols-outlined text-sm"
-                  >event_available</span
+                  >event_upcoming</span
                 >
                 Duyệt gia hạn
               </button>
@@ -539,6 +662,8 @@ const nextActionLabel = computed(() => {
   return "Không có thao tác";
 });
 
+const nextActionIcon = computed(() => actionIconByType(nextAction.value));
+
 const canReject = computed(() => selectedLoan.value?.status === "PENDING");
 const canMarkLost = computed(() =>
   ["BORROWING", "OVERDUE"].includes(selectedLoan.value?.status),
@@ -590,9 +715,23 @@ function formatDate(dateValue) {
   return new Intl.DateTimeFormat("vi-VN").format(date);
 }
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("vi-VN", {
+    style: "currency",
+    currency: "VND",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
 function formatBorrowItem(item) {
-  const displayStatus =
-    item.TRANGTHAI_GIA_HAN === "PENDING" ? "EXTENSION_PENDING" : item.TRANGTHAI;
+  const baseStatus = String(item.TRANGTHAI || "").toUpperCase();
+  const extensionPending =
+    String(item.TRANGTHAI_GIA_HAN || "").toUpperCase() === "PENDING";
+  const extensionPendingActive =
+    extensionPending && ["BORROWING", "OVERDUE"].includes(baseStatus);
+  const displayStatus = extensionPendingActive
+    ? "EXTENSION_PENDING"
+    : baseStatus;
   const bookTitle = item.SACH?.TENSACH || "Chưa có tên sách";
   const bookCode = item.MASACH || item.SACH?.MASACH || "---";
   const authors = Array.isArray(item.SACH?.TACGIA)
@@ -604,7 +743,7 @@ function formatBorrowItem(item) {
 
   return {
     id: item._id,
-    code: `PM-${item._id.slice(-6).toUpperCase()}`,
+    code: String(item?.MAPHIEU || "").trim() || "PM-NA",
     createdAt: `Tạo: ${formatDate(item.NGAYYEUCAU || item.created_at)}`,
     memberName: item.DOCGIA?.HOTEN || "Không rõ độc giả",
     memberId: item.MADOCGIA || item.DOCGIA?.MADOCGIA || "---",
@@ -614,7 +753,12 @@ function formatBorrowItem(item) {
     bookTitle,
     bookAuthor,
     bookCover: item.SACH?.ANHBIA_URL || "",
-    borrowedAt: formatDate(item.NGAYMUON || item.NGAYYEUCAU),
+    requestedAt: formatDate(item.NGAYYEUCAU || item.created_at),
+    approvedAt: formatDate(item.NGAYDUYET),
+    handedOverAt: formatDate(item.NGAYNHAN || item.NGAYMUON),
+    pickupDeadline: formatDate(item.NGAYHENLAY),
+    returnedAt: formatDate(item.NGAYTRA),
+    borrowedAt: formatDate(item.NGAYMUON || item.NGAYNHAN),
     dueAt: formatDate(item.NGAYHENTRA),
     status: item.TRANGTHAI,
     displayStatus,
@@ -624,25 +768,41 @@ function formatBorrowItem(item) {
       item.TRANGTHAI,
     fineAmount: item.TIENPHAT || 0,
     fineStatus: item.TRANGTHAI_PHAT || "PAID",
+    isOverdueFinePaid:
+      ["RETURNED", "LOST"].includes(
+        String(item.TRANGTHAI || "").toUpperCase(),
+      ) &&
+      (String(item.TRANGTHAI || "").toUpperCase() !== "RETURNED" ||
+        Number(item.SONGAYTRE || 0) > 0) &&
+      Number(item.TIENPHAT || 0) > 0 &&
+      String(item.TRANGTHAI_PHAT || "").toUpperCase() === "PAID",
+    isOverdueFineUnpaid:
+      ["RETURNED", "LOST"].includes(
+        String(item.TRANGTHAI || "").toUpperCase(),
+      ) &&
+      (String(item.TRANGTHAI || "").toUpperCase() !== "RETURNED" ||
+        Number(item.SONGAYTRE || 0) > 0) &&
+      Number(item.TIENPHAT || 0) > 0 &&
+      String(item.TRANGTHAI_PHAT || "").toUpperCase() === "UNPAID",
     extensionCount: Number(item.SO_LAN_GIA_HAN || 0),
     extensionRequestStatus: item.TRANGTHAI_GIA_HAN || "NONE",
     books: [
       {
+        code: item.SACH?.MASACH || item.MASACH || "---",
         title: bookTitle,
-        note:
-          item.TRANGTHAI_GIA_HAN === "PENDING"
-            ? "Có yêu cầu gia hạn đang chờ duyệt"
-            : item.TRANGTHAI === "LOST"
-              ? `Đền bù: ${(item.TIENPHAT || 0).toLocaleString("vi-VN")} VND`
-              : item.TRANGTHAI === "OVERDUE"
-                ? `Trễ ${item.SONGAYTRE || 0} ngày`
-                : `Mã sách: ${item.SACH?.MASACH || item.MASACH || "---"}`,
-        noteClass:
-          item.TRANGTHAI_GIA_HAN === "PENDING"
-            ? "text-[var(--primary)] font-medium"
-            : item.TRANGTHAI === "OVERDUE" || item.TRANGTHAI === "LOST"
-              ? "text-[var(--error)] font-medium"
-              : "text-[var(--on-surface-variant)]",
+        cover: item.SACH?.ANHBIA_URL || "",
+        note: extensionPendingActive
+          ? "Có yêu cầu gia hạn đang chờ duyệt"
+          : baseStatus === "LOST"
+            ? `Đền bù: ${(item.TIENPHAT || 0).toLocaleString("vi-VN")} VND`
+            : baseStatus === "OVERDUE"
+              ? `Trễ ${item.SONGAYTRE || 0} ngày`
+              : `Mã sách: ${item.SACH?.MASACH || item.MASACH || "---"}`,
+        noteClass: extensionPendingActive
+          ? "text-[var(--primary)] font-medium"
+          : baseStatus === "OVERDUE" || baseStatus === "LOST"
+            ? "text-[var(--error)] font-medium"
+            : "text-[var(--on-surface-variant)]",
       },
     ],
   };
@@ -651,6 +811,30 @@ function formatBorrowItem(item) {
 function resolveBookCover(loan) {
   const seed = encodeURIComponent(loan?.bookCode || loan?.bookTitle || "book");
   return `https://picsum.photos/seed/${seed}/120/180`;
+}
+
+function actionIconByType(action) {
+  if (action === "approve") return "fact_check";
+  if (action === "hand-over") return "inventory_2";
+  if (action === "return") return "assignment_return";
+  if (action === "pay-fine") return "payments";
+  return "pending_actions";
+}
+
+function primaryActionIcon(loan) {
+  if (!loan) return "pending_actions";
+
+  const status = String(loan.status || "").toUpperCase();
+  if (status === "PENDING") return actionIconByType("approve");
+  if (status === "APPROVED") return actionIconByType("hand-over");
+  if (["BORROWING", "OVERDUE"].includes(status)) {
+    return actionIconByType("return");
+  }
+  if (["RETURNED", "LOST"].includes(status) && loan.fineStatus === "UNPAID") {
+    return actionIconByType("pay-fine");
+  }
+
+  return "pending_actions";
 }
 
 function normalizeError(error) {

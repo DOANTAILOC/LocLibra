@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const BorrowSchema = new mongoose.Schema(
   {
+    MAPHIEU: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: null,
+    },
     MADOCGIA: {
       type: String,
       ref: "Reader",
@@ -118,6 +124,7 @@ const BorrowSchema = new mongoose.Schema(
 // Indexes
 BorrowSchema.index({ MADOCGIA: 1 });
 BorrowSchema.index({ MASACH: 1 });
+BorrowSchema.index({ MAPHIEU: 1 }, { unique: true, sparse: true });
 BorrowSchema.index({ TRANGTHAI: 1 });
 BorrowSchema.index({ NGAYMUON: -1 });
 BorrowSchema.index({ NGAYTRA: 1 });

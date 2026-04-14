@@ -1,4 +1,5 @@
 const Book = require("../models/Book");
+const Borrow = require("../models/Borrow");
 const Author = require("../models/Author");
 const Genre = require("../models/Genre");
 const Publisher = require("../models/Publisher");
@@ -33,7 +34,7 @@ const normalizeCodeArray = (value) => {
 
 const buildAuthorNameMap = async () => {
   const authors = await Author.find({ MATG: { $exists: true, $ne: null } })
-    .select("MATG Hoten")
+    .select("MATG Hoten AVATAR_URL")
     .lean();
 
   return new Map(
@@ -41,7 +42,10 @@ const buildAuthorNameMap = async () => {
       String(item.MATG || "")
         .trim()
         .toUpperCase(),
-      String(item.Hoten || "").trim(),
+      {
+        name: String(item.Hoten || "").trim(),
+        avatarUrl: String(item.AVATAR_URL || "").trim(),
+      },
     ]),
   );
 };
@@ -95,7 +99,17 @@ const enrichBookForResponse = (
     ...data,
     TACGIA: authorCodes,
     THELOAI: genreCodes,
-    TACGIA_TEN: authorCodes.map((code) => authorNameMap.get(code) || code),
+    TACGIA_TEN: authorCodes.map(
+      (code) => authorNameMap.get(code)?.name || code,
+    ),
+    TACGIA_CHI_TIET: authorCodes.map((code) => {
+      const info = authorNameMap.get(code);
+      return {
+        code,
+        name: info?.name || code,
+        avatarUrl: info?.avatarUrl || "",
+      };
+    }),
     THELOAI_TEN: genreCodes.map((code) => genreNameMap.get(code) || code),
     MANXB_TEN: publisherNameMap.get(publisherCode) || data.MANXB || null,
   };
@@ -262,6 +276,39 @@ const getBookById = async (req, res) => {
   }
 };
 
+const getBookBorrowStats = async (req, res) => {
+  try {
+    const rows = await Borrow.aggregate([
+      {
+        $match: {
+          TRANGTHAI: {
+            $in: ["APPROVED", "BORROWING", "OVERDUE", "RETURNED", "LOST"],
+          },
+          MASACH: { $exists: true, $ne: null },
+        },
+      },
+      {
+        $group: {
+          _id: "$MASACH",
+          totalBorrows: { $sum: 1 },
+        },
+      },
+    ]);
+
+    return res.status(200).json({
+      items: rows.map((item) => ({
+        MASACH: String(item._id || "").trim(),
+        totalBorrows: Number(item.totalBorrows || 0),
+      })),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Loi khi lay thong ke luot muon",
+      error: error.message,
+    });
+  }
+};
+
 const createBook = async (req, res) => {
   try {
     const payload = { ...req.body };
@@ -414,6 +461,7 @@ module.exports = {
   getNextBookCodePreview,
   getBooks,
   getBookById,
+  getBookBorrowStats,
   createBook,
   updateBook,
   deleteBook,

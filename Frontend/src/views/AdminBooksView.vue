@@ -20,7 +20,7 @@
         @open-menu="mobileMenuOpen = true"
       />
 
-      <div class="flex flex-1 overflow-hidden">
+      <div class="flex flex-1">
         <section class="flex-1 overflow-y-auto px-4 py-8 md:px-8">
           <AdminPageHero
             title="Quản lý Kho Sách"
@@ -690,6 +690,29 @@
         <form class="space-y-4" @submit.prevent="submitMetaCreate">
           <div v-if="metaCreateType === 'author'" class="space-y-3">
             <div class="space-y-1">
+              <label class="form-label">Avatar tác giả</label>
+              <input
+                type="file"
+                accept="image/*"
+                class="form-input"
+                @change="handleMetaAuthorAvatarChange"
+              />
+              <p class="text-xs text-[var(--on-surface-variant)]">
+                Nếu không chọn ảnh, hệ thống sẽ tự tạo avatar theo tên tác giả.
+              </p>
+              <div v-if="metaAuthorAvatarPreview" class="pt-2">
+                <div
+                  class="h-20 w-20 overflow-hidden rounded-full border border-[rgb(184_188_163/25%)]"
+                >
+                  <img
+                    :src="metaAuthorAvatarPreview"
+                    alt="Avatar tác giả"
+                    class="h-full w-full object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+            <div class="space-y-1">
               <label class="form-label">Tên tác giả</label>
               <input
                 v-model.trim="metaForm.Hoten"
@@ -710,7 +733,7 @@
               <label class="form-label">Tiểu sử</label>
               <textarea
                 v-model.trim="metaForm.TieuSu"
-                class="form-input min-h-[90px]"
+                class="form-input min-h-[160px]"
               ></textarea>
             </div>
           </div>
@@ -781,6 +804,55 @@
         </form>
       </div>
     </div>
+
+    <div
+      v-if="showMetaAuthorCropModal"
+      class="fixed inset-0 z-[86] flex items-center justify-center bg-black/60 px-4"
+    >
+      <div
+        class="w-full max-w-3xl rounded-2xl bg-[var(--surface-container-lowest)] p-5 shadow-2xl"
+      >
+        <div class="mb-4 flex items-center justify-between">
+          <h3 class="text-xl">Cắt avatar tác giả</h3>
+          <button
+            type="button"
+            class="rounded-lg p-1.5 transition hover:bg-[var(--surface-container-highest)]"
+            @click="closeMetaAuthorCropModal"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div
+          class="relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-xl bg-[var(--surface-container-low)]"
+        >
+          <img
+            ref="metaAuthorCropImageRef"
+            :src="metaAuthorCropSource"
+            alt="Cắt avatar tác giả"
+            class="block max-w-full"
+            @load="initMetaAuthorCropper"
+          />
+        </div>
+
+        <div class="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            class="btn-secondary px-4 py-2 text-xs"
+            @click="closeMetaAuthorCropModal"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            class="btn-primary px-4 py-2 text-xs"
+            @click="applyMetaAuthorCrop"
+          >
+            Dùng ảnh này
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -842,6 +914,12 @@ const showCoverCropModal = ref(false);
 const coverCropImageRef = ref(null);
 const coverCropSource = ref("");
 let coverCropperInstance = null;
+const metaAuthorAvatarFile = ref(null);
+const metaAuthorAvatarPreview = ref("");
+const showMetaAuthorCropModal = ref(false);
+const metaAuthorCropImageRef = ref(null);
+const metaAuthorCropSource = ref("");
+let metaAuthorCropperInstance = null;
 const noticeMessage = ref("");
 const noticeType = ref("success");
 let noticeTimer = null;
@@ -1203,6 +1281,11 @@ function openMetaCreateModal(type) {
   metaCreateType.value = type;
   metaForm.value = getEmptyMetaForm(type);
   metaNextPublisherCode.value = "";
+  metaAuthorAvatarFile.value = null;
+  if (metaAuthorAvatarPreview.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorAvatarPreview.value);
+  }
+  metaAuthorAvatarPreview.value = "";
   showCreateModal.value = false;
   showMetaCreateModal.value = true;
 
@@ -1212,8 +1295,104 @@ function openMetaCreateModal(type) {
 }
 
 function closeMetaCreateModal() {
+  closeMetaAuthorCropModal();
+  metaAuthorAvatarFile.value = null;
+  if (metaAuthorAvatarPreview.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorAvatarPreview.value);
+  }
+  metaAuthorAvatarPreview.value = "";
   showMetaCreateModal.value = false;
   showCreateModal.value = true;
+}
+
+function destroyMetaAuthorCropper() {
+  if (!metaAuthorCropperInstance) return;
+  metaAuthorCropperInstance.destroy();
+  metaAuthorCropperInstance = null;
+}
+
+function initMetaAuthorCropper() {
+  if (!showMetaAuthorCropModal.value || !metaAuthorCropImageRef.value) return;
+
+  destroyMetaAuthorCropper();
+  metaAuthorCropperInstance = new Cropper(metaAuthorCropImageRef.value, {
+    aspectRatio: 1,
+    viewMode: 1,
+    autoCropArea: 0.9,
+    dragMode: "move",
+    responsive: true,
+    background: false,
+    guides: true,
+    center: true,
+    highlight: false,
+    movable: true,
+    zoomable: true,
+    cropBoxMovable: true,
+    cropBoxResizable: true,
+    scalable: false,
+    rotatable: false,
+  });
+}
+
+function closeMetaAuthorCropModal() {
+  showMetaAuthorCropModal.value = false;
+  destroyMetaAuthorCropper();
+  if (metaAuthorCropSource.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorCropSource.value);
+  }
+  metaAuthorCropSource.value = "";
+}
+
+function handleMetaAuthorAvatarChange(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    metaAuthorAvatarFile.value = null;
+    if (metaAuthorAvatarPreview.value?.startsWith("blob:")) {
+      URL.revokeObjectURL(metaAuthorAvatarPreview.value);
+    }
+    metaAuthorAvatarPreview.value = "";
+    return;
+  }
+
+  if (metaAuthorCropSource.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorCropSource.value);
+  }
+
+  metaAuthorCropSource.value = URL.createObjectURL(file);
+  showMetaAuthorCropModal.value = true;
+}
+
+async function applyMetaAuthorCrop() {
+  if (!metaAuthorCropperInstance) return;
+
+  const canvas = metaAuthorCropperInstance.getCroppedCanvas({
+    width: 600,
+    height: 600,
+    imageSmoothingQuality: "high",
+  });
+  if (!canvas) return;
+
+  const blob = await new Promise((resolve) => {
+    canvas.toBlob(resolve, "image/png", 0.95);
+  });
+  if (!blob) {
+    errorMessage.value = "Không thể xử lý avatar tác giả đã cắt";
+    return;
+  }
+
+  metaAuthorAvatarFile.value = new File(
+    [blob],
+    `author-avatar-${Date.now()}.png`,
+    {
+      type: "image/png",
+    },
+  );
+
+  if (metaAuthorAvatarPreview.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorAvatarPreview.value);
+  }
+  metaAuthorAvatarPreview.value = URL.createObjectURL(blob);
+  closeMetaAuthorCropModal();
 }
 
 async function fetchNextPublisherCode() {
@@ -1237,7 +1416,18 @@ async function submitMetaCreate() {
         QuocTich: String(metaForm.value.QuocTich || "").trim(),
         TieuSu: String(metaForm.value.TieuSu || "").trim(),
       };
-      const response = await api.post("/admin/authors", payload);
+      const requestBody = metaAuthorAvatarFile.value
+        ? (() => {
+            const formData = new FormData();
+            Object.entries(payload).forEach(([key, value]) => {
+              formData.append(key, value);
+            });
+            formData.append("avatar", metaAuthorAvatarFile.value);
+            return formData;
+          })()
+        : payload;
+
+      const response = await api.post("/admin/authors", requestBody);
       await fetchMetadata();
       const createdCode = String(response.data?.MATG || "").trim();
       if (createdCode && !newBook.value.TACGIA.includes(createdCode)) {
@@ -1269,6 +1459,11 @@ async function submitMetaCreate() {
 
     showMetaCreateModal.value = false;
     showCreateModal.value = true;
+    metaAuthorAvatarFile.value = null;
+    if (metaAuthorAvatarPreview.value?.startsWith("blob:")) {
+      URL.revokeObjectURL(metaAuthorAvatarPreview.value);
+    }
+    metaAuthorAvatarPreview.value = "";
   } catch (error) {
     errorMessage.value = normalizeError(error);
   } finally {
@@ -1520,13 +1715,28 @@ watch(showCoverCropModal, async (isOpen) => {
   }
 });
 
+watch(showMetaAuthorCropModal, async (isOpen) => {
+  if (!isOpen) return;
+  await nextTick();
+  if (metaAuthorCropImageRef.value?.complete) {
+    initMetaAuthorCropper();
+  }
+});
+
 onBeforeUnmount(() => {
   destroyCoverCropper();
+  destroyMetaAuthorCropper();
   if (coverCropSource.value?.startsWith("blob:")) {
     URL.revokeObjectURL(coverCropSource.value);
   }
   if (coverPreview.value?.startsWith("blob:")) {
     URL.revokeObjectURL(coverPreview.value);
+  }
+  if (metaAuthorCropSource.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorCropSource.value);
+  }
+  if (metaAuthorAvatarPreview.value?.startsWith("blob:")) {
+    URL.revokeObjectURL(metaAuthorAvatarPreview.value);
   }
 });
 </script>

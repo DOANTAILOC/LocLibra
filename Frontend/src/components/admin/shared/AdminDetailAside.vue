@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="hidden w-80 overflow-y-auto border-l border-[rgb(184_188_163/20%)] bg-[var(--surface-container-low)] p-6 xl:block"
+    class="hidden w-80 border-l border-[rgb(184_188_163/20%)] bg-[var(--surface-container-low)] p-6 xl:sticky xl:top-16 xl:block xl:h-[calc(100vh-4rem)] xl:self-start xl:overflow-y-auto"
   >
     <div class="mb-8 flex items-center justify-between">
       <h4 class="text-lg">{{ title }}</h4>

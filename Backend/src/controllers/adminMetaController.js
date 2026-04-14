@@ -6,8 +6,43 @@ const Publisher = require("../models/Publisher");
 const Book = require("../models/Book");
 const Borrow = require("../models/Borrow");
 const Reader = require("../models/Reader");
+const cloudinary = require("../config/cloudinary");
 
 const toRegex = (q) => ({ $regex: q, $options: "i" });
+
+const uploadBufferToCloudinary = (buffer, folder) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        return resolve(result);
+      },
+    );
+
+    stream.end(buffer);
+  });
+};
+
+const normalizeInputText = (value) => String(value || "").trim();
+
+const buildAuthorDefaultAvatarUrl = (fullName) => {
+  const normalizedName = normalizeInputText(fullName) || "Tac Gia";
+  const query = new URLSearchParams({
+    name: normalizedName,
+    background: "53634f",
+    color: "ffffff",
+    rounded: "true",
+    bold: "true",
+    size: "256",
+    format: "png",
+  });
+
+  return `https://ui-avatars.com/api/?${query.toString()}`;
+};
 
 const generateNextPublisherCode = async () => {
   const existing = await Publisher.find({ MANXB: /^NXB\d+$/i })
@@ -223,12 +258,26 @@ const getNextAuthorCodePreview = async (req, res) => {
 };
 
 const createAuthor = async (req, res) => {
+  let uploadedAvatarPublicId = "";
+
   try {
     const payload = {
-      Hoten: req.body?.Hoten,
-      TieuSu: req.body?.TieuSu,
-      QuocTich: req.body?.QuocTich,
+      Hoten: normalizeInputText(req.body?.Hoten),
+      TieuSu: normalizeInputText(req.body?.TieuSu),
+      QuocTich: normalizeInputText(req.body?.QuocTich),
+      AVATAR_URL: buildAuthorDefaultAvatarUrl(req.body?.Hoten),
+      AVATAR_PUBLIC_ID: "",
     };
+
+    if (req.file) {
+      const uploadResult = await uploadBufferToCloudinary(
+        req.file.buffer,
+        "loclibrary/authors",
+      );
+      payload.AVATAR_URL = uploadResult.secure_url || "";
+      payload.AVATAR_PUBLIC_ID = uploadResult.public_id || "";
+      uploadedAvatarPublicId = payload.AVATAR_PUBLIC_ID;
+    }
 
     for (let retry = 0; retry < 3; retry += 1) {
       payload.MATG = await generateNextAuthorCode();
@@ -247,26 +296,68 @@ const createAuthor = async (req, res) => {
 
     return res.status(500).json({ message: "Không thể tạo mã tác giả" });
   } catch (error) {
+    if (uploadedAvatarPublicId) {
+      cloudinary.uploader.destroy(uploadedAvatarPublicId).catch(() => null);
+    }
     return normalizeError(res, "Lỗi khi tạo tác giả", error, 400);
   }
 };
 
 const updateAuthor = async (req, res) => {
+  let newAvatarPublicId = "";
+
   try {
+    const currentItem = await Author.findById(req.params.id);
+    if (!currentItem) {
+      return res.status(404).json({ message: "Không tìm thấy tác giả" });
+    }
+
     const payload = { ...req.body };
     delete payload.MATG;
+    delete payload.AVATAR_URL;
+    delete payload.AVATAR_PUBLIC_ID;
+
+    ["Hoten", "TieuSu", "QuocTich"].forEach((field) => {
+      if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+      payload[field] = normalizeInputText(payload[field]);
+    });
+
+    if (req.file) {
+      const uploadResult = await uploadBufferToCloudinary(
+        req.file.buffer,
+        "loclibrary/authors",
+      );
+      payload.AVATAR_URL = uploadResult.secure_url || "";
+      payload.AVATAR_PUBLIC_ID = uploadResult.public_id || "";
+      newAvatarPublicId = payload.AVATAR_PUBLIC_ID;
+    } else {
+      const hasCustomAvatar = Boolean(
+        String(currentItem.AVATAR_PUBLIC_ID || "").trim(),
+      );
+
+      if (!hasCustomAvatar) {
+        const nextName = payload.Hoten || currentItem.Hoten;
+        payload.AVATAR_URL = buildAuthorDefaultAvatarUrl(nextName);
+      }
+    }
 
     const item = await Author.findByIdAndUpdate(req.params.id, payload, {
       new: true,
       runValidators: true,
     });
 
-    if (!item) {
-      return res.status(404).json({ message: "Không tìm thấy tác giả" });
+    if (req.file) {
+      const oldPublicId = String(currentItem.AVATAR_PUBLIC_ID || "").trim();
+      if (oldPublicId && oldPublicId !== item.AVATAR_PUBLIC_ID) {
+        cloudinary.uploader.destroy(oldPublicId).catch(() => null);
+      }
     }
 
     return res.status(200).json(item);
   } catch (error) {
+    if (newAvatarPublicId) {
+      cloudinary.uploader.destroy(newAvatarPublicId).catch(() => null);
+    }
     return normalizeError(res, "Lỗi khi cập nhật tác giả", error, 400);
   }
 };
@@ -276,6 +367,12 @@ const deleteAuthor = async (req, res) => {
     const item = await Author.findByIdAndDelete(req.params.id);
     if (!item) {
       return res.status(404).json({ message: "Không tìm thấy tác giả" });
+    }
+
+    if (item.AVATAR_PUBLIC_ID) {
+      cloudinary.uploader
+        .destroy(String(item.AVATAR_PUBLIC_ID || "").trim())
+        .catch(() => null);
     }
 
     return res.status(200).json({ message: "Xóa tác giả thành công" });

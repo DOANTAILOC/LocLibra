@@ -3,6 +3,7 @@ const {
   authenticate,
   authorizeRoles,
 } = require("../middlewares/authMiddleware");
+const { uploadAvatar } = require("../middlewares/uploadMiddleware");
 const {
   getAuthors,
   getNextAuthorCodePreview,
@@ -35,8 +36,8 @@ router.get("/dashboard-summary", getDashboardSummary);
 
 router.get("/authors", getAuthors);
 router.get("/authors/next-code", getNextAuthorCodePreview);
-router.post("/authors", authorizeRoles("admin"), createAuthor);
-router.put("/authors/:id", authorizeRoles("admin"), updateAuthor);
+router.post("/authors", authorizeRoles("admin"), uploadAvatar, createAuthor);
+router.put("/authors/:id", authorizeRoles("admin"), uploadAvatar, updateAuthor);
 router.delete("/authors/:id", authorizeRoles("admin"), deleteAuthor);
 
 router.get("/genres", getGenres);

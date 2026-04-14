@@ -5,6 +5,7 @@ const {
   rejectBorrowRequest,
   handOverBook,
   returnBook,
+  cancelBorrowRequestByReader,
   requestBorrowExtension,
   approveBorrowExtension,
   rejectBorrowExtension,
@@ -31,6 +32,12 @@ router.post(
   createBorrowRequest,
 );
 router.get("/my", authenticate, authorizeRoles("reader"), getMyBorrowRequests);
+router.patch(
+  "/:id/cancel",
+  authenticate,
+  authorizeRoles("reader"),
+  cancelBorrowRequestByReader,
+);
 router.patch(
   "/:id/extend",
   authenticate,
